@@ -1,131 +1,250 @@
-name: "🔵FACEBOOK STORY"
+# ═══════════════════════════════════════════════════════════════════════════
+# FACEBOOK STORY AUTOMATION WORKFLOW
+# ─────────────────────────────────────────────────────────────────────────
+# Purpose : Ek Facebook Story video generate karta hai aur upload karta hai.
+# Trigger : Schedule (roz 5:00 AM IST) ya manual dispatch
+# Runtime : ~3-4 min (cached) | ~8-10 min (first run)
+# Output  : Final_FB_Story.mp4 + Google Drive link + Facebook Story live
+# ─────────────────────────────────────────────────────────────────────────
+# ARCHITECTURE:
+#   1. Public repo YAML = orchestration (yeh file)
+#   2. Private repo Python = actual logic (Story_video.py)
+#   3. Cache = sab dependencies (FFmpeg, Fonts, Piper, Python packages)
+#   4. Telegram = sirf ek final report with full diagnosis
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────────────
+# [SECTION 1] WORKFLOW NAME & TRIGGERS
+# ───────────────────────────────────────────────────────────────────────────
+name: "🔵FACEBOOK STORY (Public Runner)"
 
 on:
+  # Manual trigger — GitHub Actions UI se "Run workflow" button
   workflow_dispatch:
     inputs:
       upload_to_social:
         description: 'Upload to Facebook Story?'
         required: true
         type: boolean
-        default: false
-  schedule:
-    - cron: '30 23 * * *'   # 5:00 AM IST
+        default: false       # Default: false — safe testing ke liye
 
+  # Auto trigger — roz 23:30 UTC = 5:00 AM IST
+  schedule:
+    - cron: '30 23 * * *'
+
+# ───────────────────────────────────────────────────────────────────────────
+# [SECTION 2] PERMISSIONS
+# ───────────────────────────────────────────────────────────────────────────
+# contents: write  → cleanup step mein repo files delete karne ke liye
+# actions: write   → cache write karne ke liye
 permissions:
   contents: write
   actions: write
 
+# ───────────────────────────────────────────────────────────────────────────
+# [SECTION 3] CONCURRENCY CONTROL
+# ───────────────────────────────────────────────────────────────────────────
+# Ek waqt mein sirf ek run — parallel runs se Facebook duplicate Story upload
+# rokta hai
 concurrency:
   group: facebook-story
-  cancel-in-progress: false
+  cancel-in-progress: false    # Chal rahi run ko cancel NAHI karo
 
+# ───────────────────────────────────────────────────────────────────────────
+# [SECTION 4] JOB DEFINITION
+# ───────────────────────────────────────────────────────────────────────────
 jobs:
   fb-story:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 90        # 90 min max — infinite hang se bachne ke liye
 
+    # Global env vars — saare steps mein available
     env:
+      # Cache version — jab dependencies update karo toh v6→v7 karo
+      # Isse purana cache automatically invalidate ho jaata hai
       CACHE_VERSION: v6
+
+      # Dependencies folder — sab kuch yahan store hoga
+      # Path: /home/runner/work/<repo>/<repo>/.dependencies
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 1] REPO CHECKOUT
+      # Purpose: Public repo ko runner mein clone karo
+      # ═════════════════════════════════════════════════════════════════════
       - name: Checkout Public Repository
         uses: actions/checkout@v4
 
-      # ============================================================
-      # 🧠 MASTER CACHE
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 2] MASTER CACHE RESTORE
+      # Purpose: Sab kuch (FFmpeg+Fonts+Python+Piper) ek hi cache se restore
+      # ─────────────────────────────────────────────────────────────────────
+      # Cache hit  → files restore, download skip (fast ~3-4 min run)
+      # Cache miss → sab download hoga, cache mein save (slow ~8-10 min run)
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
         uses: actions/cache@v4
         with:
           path: |
-            .dependencies
-            ~/.cache/pip
-            ~/.local/share/piper
+            .dependencies              # FFmpeg binaries, fonts, Piper models, venv
+            ~/.cache/pip               # pip download cache
+            ~/.local/share/piper       # Piper system data
+          # Primary key — exact match chahiye
           key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+          # Fallback keys — partial match bhi chalega
           restore-keys: |
             ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 3] DEPENDENCIES FOLDER STRUCTURE
+      # Purpose: Sab folders ek baar banao — baad mein reference easy
+      # ═════════════════════════════════════════════════════════════════════
       - name: 📁 Prepare Dependencies Folder
         run: |
           mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
+          # bin/           → FFmpeg, SoX, espeak-ng binaries
+          # fonts/         → Custom TTF fonts
+          # models/        → Future AI models ke liye
+          # system-fonts/  → System apt-installed fonts backup
+          # python-venv/   → Python virtual environment
+          # piper/         → Piper TTS models (.onnx + .json)
+          # coqui/         → Coqui TTS marker
+          # logs/          → Debug logs
+
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
           echo "✅ Deps folder ready: $DEPS_DIR"
 
-      # ============================================================
-      # 📥 Private repo se code
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 4] PRIVATE REPO SE CODE FETCH
+      # Purpose: Private repo `admin` se Python script copy karo
+      # ─────────────────────────────────────────────────────────────────────
+      # Sequence:
+      #   1. Private repo clone karo (short-lived token se)
+      #   2. Sirf Story_video.py copy karo
+      #   3. Poora cloned folder turant delete karo (security)
+      # ═════════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
           echo "🔐 Private repo se script laa rahe hain..."
+
+          # --depth 1 = sirf latest commit clone (fast)
           git clone --depth 1 https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
+
+          # Target folder create
           mkdir -p "Social media/Facebook"
+
+          # Sirf yeh ek file copy karo
           cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
+
+          # Cloned repo turant delete
           rm -rf temp_private_repo
           echo "✅ Script copied!"
 
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 5] PYTHON RUNTIME SETUP
+      # Purpose: Python 3.11 install karo (compatible version)
+      # ═════════════════════════════════════════════════════════════════════
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ============================================================
-      # 🎬 FFmpeg + System Fonts (Cache-Aware)
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 6] FFmpeg + SoX + espeak-ng (CACHE-AWARE)
+      # Purpose: Video/audio processing tools install karo
+      # ─────────────────────────────────────────────────────────────────────
+      # TOOLS INSTALLED:
+      #   ffmpeg       → video rendering, audio mixing
+      #   ffprobe      → media info extraction
+      #   sox          → advanced audio processing
+      #   espeak-ng    → fallback TTS (offline)
+      #   fonts-noto*  → system font support (Devanagari, Arabic, emoji)
+      #
+      # CACHE LOGIC:
+      #   Marker file (.ffmpeg_ok) hai + binaries hain → CACHE HIT → copy from cache
+      #   Warna → apt install → cache mein save
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
+
+          # ─── CACHE HIT PATH ───
           if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/ffprobe" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
             echo "⚡ FFmpeg + SoX CACHED — restoring..."
+
+            # Binaries ko /usr/local/bin mein restore
             sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
             sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox
             sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox
+
+            # System fonts restore
             if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
               sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
               sudo fc-cache -f > /dev/null 2>&1 || true
             fi
+
+            # espeak-ng restore
             if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
               sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
+
+          # ─── CACHE MISS PATH ───
           else
             echo "📥 FFmpeg + SoX + espeak-ng install (pehli baar)..."
+
+            # System update + install (one command, quiet mode)
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
               fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
-            
+
+            # Binaries ko cache folder mein save
             cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
             cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe"
             cp "$(which sox)" "$DEPS_DIR/bin/sox"
             cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
-            
+
+            # System fonts backup
             mkdir -p "$DEPS_DIR/system-fonts/truetype"
             cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
-            
+
+            # Marker file banao (next time cache hit ke liye)
             touch "$MARKER"
             echo "✅ FFmpeg + SoX + espeak-ng cached!"
           fi
+
+          # Verify
           ffmpeg -version | head -1
           sox --version
 
-      # ============================================================
-      # 🔤 Custom Fonts (Cache-Aware)
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 7] CUSTOM FONTS (CACHE-AWARE)
+      # Purpose: Branded fonts download karo — Arabic, Hindi, English ke liye
+      # ─────────────────────────────────────────────────────────────────────
+      # 6 FONTS:
+      #   NotoSans-Regular/Bold          → English text
+      #   NotoSansDevanagari-Regular/Bold → Hindi text
+      #   NotoNaskhArabic-Regular/Bold   → Arabic text
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
+          # Cache hit check — 6+ files honi chahiye
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
             echo "⚡ Custom fonts CACHED — skipping download!"
           else
             echo "📥 Custom fonts download (pehli baar)..."
             mkdir -p "$DEPS_DIR/fonts"
+
+            # Associative array — filename → URL
             declare -A FONTS=(
               ["NotoSans-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
               ["NotoSans-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
@@ -134,64 +253,103 @@ jobs:
               ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
             )
+
             for name in "${!FONTS[@]}"; do
               wget -q --timeout=30 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
+
             touch "$DEPS_DIR/.fonts_ok"
             echo "✅ Custom fonts cached!"
           fi
+
+          # System font folder mein link karo (FFmpeg subtitles ke liye)
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-      # ============================================================
-      # 🐍 Python Packages (Cache-Aware Venv)
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 8] PYTHON PACKAGES VENV (CACHE-AWARE)
+      # Purpose: Isolated Python environment with all required packages
+      # ─────────────────────────────────────────────────────────────────────
+      # PACKAGES:
+      #   Core        → requests, edge-tts, mutagen, Pillow
+      #   Google      → google-api-python-client, google-auth-*
+      #   TTS extras  → gTTS, boto3, piper-tts, numpy, scipy, soundfile
+      #
+      # VERIFY LOGIC: Sirf marker nahi, actual import test bhi
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
           VENV="$DEPS_DIR/python-venv"
+
+          # Marker hai + actual imports work karte hain
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
             echo "⚡ Python packages CACHED — skipping pip!"
           else
             echo "📥 Python packages install (pehli baar)..."
-            rm -rf "$VENV"
+            rm -rf "$VENV"                    # Purana corrupt venv delete
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
+
+            # Core + TTS + Google APIs
             "$VENV/bin/pip" install --no-cache-dir \
               requests edge-tts mutagen Pillow \
               google-api-python-client google-auth-httplib2 google-auth-oauthlib \
               gTTS boto3 piper-tts numpy scipy soundfile
+
             touch "$VENV/.installed"
             echo "✅ Python packages cached!"
           fi
+
+          # PATH mein add karo — Python script isi venv ko use karegi
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ============================================================
-      # 🎙️ Piper Models (Cache-Aware)
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 9] PIPER TTS MODELS (CACHE-AWARE)
+      # Purpose: Offline neural TTS models download karo
+      # ─────────────────────────────────────────────────────────────────────
+      # MODELS:
+      #   hi_IN-pratham-medium.onnx      → Male Hindi voice
+      #   hi_IN-priyamvada-medium.onnx   → Female Hindi voice
+      #
+      # Model + .json config dono chahiye (~63MB each)
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🎙️ Piper Models (Cache-Aware)
         run: |
           P="$DEPS_DIR/piper"
+
           if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
             echo "⚡ Piper models CACHED!"
           else
             echo "📥 Piper models download (pehli baar)..."
             rm -rf "$P" && mkdir -p "$P"
             cd "$P"
+
             BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+
+            # Pratham (male)
             wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"      -O hi_IN-pratham-medium.onnx || true
             wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
+
+            # Priyamvada (female)
             wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"      -O hi_IN-priyamvada-medium.onnx || true
             wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json || true
+
             touch "$P/.installed"
             cd "$GITHUB_WORKSPACE"
             echo "✅ Piper models cached!"
           fi
+
+          # Python script ke liye env mein export
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ============================================================
-      # 🔍 MASTER TOOL HEALTH CHECK — Har tool ka status JSON mein
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 10] MASTER TOOL HEALTH CHECK
+      # Purpose: Har tool install hai ya nahi verify karo + JSON report banao
+      # ─────────────────────────────────────────────────────────────────────
+      # Yeh JSON file Python script read karegi aur Telegram report mein bhejegi.
+      # Har tool ka status: "ok" | "fail" | "hold"
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🔍 Master Tool Health Check
         id: health
         run: |
@@ -199,101 +357,73 @@ jobs:
           echo "{" > "$REPORT_FILE"
           echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
           echo "  \"tools\": {" >> "$REPORT_FILE"
-          
+
+          # Helper function — JSON entry add karo
           FIRST=1
           add_entry() {
-            local name="$1"
-            local status="$2"
-            local detail="$3"
+            local name="$1"; local status="$2"; local detail="$3"
             if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
             FIRST=0
             printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
             echo "[HEALTH] $name → $status ($detail)"
           }
-          
-          # FFmpeg
+
+          # ─── Binary tools check ───
           if command -v ffmpeg >/dev/null 2>&1; then
             V=$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3)
             add_entry "ffmpeg" "ok" "$V"
-          else
-            add_entry "ffmpeg" "fail" "not found"
-          fi
-          
-          # FFprobe
+          else add_entry "ffmpeg" "fail" "not found"; fi
+
           if command -v ffprobe >/dev/null 2>&1; then
             add_entry "ffprobe" "ok" "present"
-          else
-            add_entry "ffprobe" "fail" "not found"
-          fi
-          
-          # SoX
+          else add_entry "ffprobe" "fail" "not found"; fi
+
           if command -v sox >/dev/null 2>&1; then
             V=$(sox --version 2>&1 | head -1 | cut -d' ' -f2)
             add_entry "sox" "ok" "$V"
-          else
-            add_entry "sox" "fail" "not found"
-          fi
-          
-          # espeak-ng
+          else add_entry "sox" "fail" "not found"; fi
+
           if command -v espeak-ng >/dev/null 2>&1; then
             add_entry "espeak-ng" "ok" "present"
-          else
-            add_entry "espeak-ng" "fail" "not found"
-          fi
-          
-          # edge-tts
+          else add_entry "espeak-ng" "fail" "not found"; fi
+
           if command -v edge-tts >/dev/null 2>&1; then
             V=$(edge-tts --version 2>&1 | head -1 || echo "present")
             add_entry "edge-tts" "ok" "$V"
-          else
-            add_entry "edge-tts" "fail" "not found"
-          fi
-          
-          # gTTS
+          else add_entry "edge-tts" "fail" "not found"; fi
+
           if command -v gtts-cli >/dev/null 2>&1; then
             add_entry "gtts" "ok" "present"
-          else
-            add_entry "gtts" "fail" "not found"
-          fi
-          
-          # piper
+          else add_entry "gtts" "fail" "not found"; fi
+
           if command -v piper >/dev/null 2>&1; then
             add_entry "piper-cli" "ok" "present"
-          else
-            add_entry "piper-cli" "fail" "not found"
-          fi
-          
-          # Piper models
+          else add_entry "piper-cli" "fail" "not found"; fi
+
+          # ─── Model files check ───
           if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then
             SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1)
             add_entry "piper-model-pratham" "ok" "$SZ"
-          else
-            add_entry "piper-model-pratham" "fail" "missing"
-          fi
-          
+          else add_entry "piper-model-pratham" "fail" "missing"; fi
+
           if [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ]; then
             SZ=$(du -h "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" | cut -f1)
             add_entry "piper-model-priyamvada" "ok" "$SZ"
-          else
-            add_entry "piper-model-priyamvada" "fail" "missing"
-          fi
-          
-          # Custom fonts
+          else add_entry "piper-model-priyamvada" "fail" "missing"; fi
+
+          # ─── Fonts check ───
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
-          
-          # System fonts count
+
           SFC=$(fc-list 2>/dev/null | wc -l)
           add_entry "system-fonts" "ok" "$SFC fonts"
-          
-          # Python venv
+
+          # ─── Venv check ───
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
             add_entry "python-venv" "ok" "installed"
-          else
-            add_entry "python-venv" "fail" "missing"
-          fi
-          
-          # API Keys presence check
+          else add_entry "python-venv" "fail" "missing"; fi
+
+          # ─── API keys presence check ───
           for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
                      CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
                      ELEVENLABS_API_KEY AZURE_SPEECH_KEY GOOGLE_CLOUD_TTS_KEY \
@@ -306,31 +436,42 @@ jobs:
               add_entry "key:$key" "hold" "not set"
             fi
           done
-          
+
           echo "  }" >> "$REPORT_FILE"
           echo "}" >> "$REPORT_FILE"
-          
-          # Also expose to env for Python
+
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
-          
-          echo ""
-          echo "=== TOOLS STATUS JSON ==="
+          echo "=== TOOLS STATUS ==="
           cat "$REPORT_FILE"
 
-      # ============================================================
-      # 🚀 Main Script Run
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 11] MAIN PYTHON PIPELINE
+      # Purpose: Actual Facebook Story generation karo
+      # ─────────────────────────────────────────────────────────────────────
+      # Ye step:
+      #   1. Sab env vars pass karta hai Python ko
+      #   2. Python script run karta hai
+      #   3. Script internally: Hadith fetch → TTS → video render → upload
+      #   4. End mein ek final Telegram report bhejta hai
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         env:
+          # ─── Core ───
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+
+          # ─── Google Drive ───
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
+
+          # ─── Facebook ───
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+
+          # ─── AI Providers ───
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
@@ -339,9 +480,13 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+
+          # ─── Media Sources ───
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+
+          # ─── TTS Engines ───
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
@@ -349,8 +494,14 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+
+          # ─── Translation ───
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+
+          # ─── Hadith API ───
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
+
+          # ─── Runtime ───
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
@@ -359,20 +510,26 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: python3 "Social media/Facebook/Story_video.py"
 
-      # ============================================================
-      # 📤 Artifact
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 12] ARTIFACT UPLOAD
+      # Purpose: Video ko GitHub Actions artifact ke roop mein save karo
+      # ─────────────────────────────────────────────────────────────────────
+      # 5 din tak download kar sakte ho GitHub UI se
+      # ═════════════════════════════════════════════════════════════════════
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: fb-story-video
           path: Final_FB_Story.mp4
           retention-days: 5
-          if-no-files-found: ignore
+          if-no-files-found: ignore    # Fail na kare agar file nahi hai
 
-      # ============================================================
-      # 🧹 Cleanup
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 13] SECURITY CLEANUP
+      # Purpose: Public repo se private files delete karo (security)
+      # ─────────────────────────────────────────────────────────────────────
+      # `if: always()` = chahe upar fail ho, yeh chalega
+      # ═════════════════════════════════════════════════════════════════════
       - name: 🧹 Cleanup Public Repo
         if: always()
         run: |
@@ -380,9 +537,10 @@ jobs:
           rm -f Final_FB_Story.mp4
           echo "✅ Clean!"
 
-      # ============================================================
-      # 📊 Cache Status
-      # ============================================================
+      # ═════════════════════════════════════════════════════════════════════
+      # [STEP 14] CACHE STATUS REPORT
+      # Purpose: Workflow log mein cache info print karo (debug)
+      # ═════════════════════════════════════════════════════════════════════
       - name: 📊 Cache Status
         if: always()
         run: |
