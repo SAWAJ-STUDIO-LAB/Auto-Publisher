@@ -1,5 +1,11 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# [01] WORKFLOW NAME
+# ═══════════════════════════════════════════════════════════════════════════
 name: "🔵FACEBOOK STORY"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [02] TRIGGERS
+# ═══════════════════════════════════════════════════════════════════════════
 on:
   workflow_dispatch:
     inputs:
@@ -11,14 +17,23 @@ on:
   schedule:
     - cron: '30 23 * * *'
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [03] PERMISSIONS
+# ═══════════════════════════════════════════════════════════════════════════
 permissions:
   contents: write
   actions: write
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [04] CONCURRENCY
+# ═══════════════════════════════════════════════════════════════════════════
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [05] JOB DEFINITION
+# ═══════════════════════════════════════════════════════════════════════════
 jobs:
   fb-story:
     runs-on: ubuntu-latest
@@ -28,10 +43,20 @@ jobs:
       CACHE_VERSION: v8
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # [06] STEPS
+    # ═══════════════════════════════════════════════════════════════════════
     steps:
+
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.01] CHECKOUT
+      # ═══════════════════════════════════════════════════════════════════════
       - name: Checkout Public Repository
         uses: actions/checkout@v4
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.02] RESTORE MASTER CACHE
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
         uses: actions/cache@v4
@@ -45,11 +70,17 @@ jobs:
             ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.03] PREPARE DEPENDENCIES FOLDER
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 📁 Prepare Dependencies Folder
         run: |
           mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.04] FETCH PRIVATE CODE
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
@@ -60,11 +91,17 @@ jobs:
           cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
           rm -rf temp_private_repo
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.05] SETUP PYTHON 3.11
+      # ═══════════════════════════════════════════════════════════════════════
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.06] FFMPEG + SYSTEM FONTS (CACHE-AWARE WITH LIBS)
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
@@ -151,6 +188,9 @@ jobs:
           sox --version 2>&1 | head -1
           echo "Libraries cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.07] CUSTOM FONTS (9 FONTS INCLUDING EMOJI)
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
@@ -186,6 +226,9 @@ jobs:
           echo "=== FONTS INSTALLED ==="
           ls -la ~/.fonts/
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.08] PYTHON PACKAGES VENV
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
           VENV="$DEPS_DIR/python-venv"
@@ -208,6 +251,9 @@ jobs:
 
           echo "$VENV/bin" >> $GITHUB_PATH
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.09] PIPER TTS MODELS
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🎙️ Piper Models (Cache-Aware)
         run: |
           P="$DEPS_DIR/piper"
@@ -233,6 +279,9 @@ jobs:
 
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.10] HEALTH CHECK
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🔍 Master Tool Health Check
         id: health
         run: |
@@ -349,6 +398,9 @@ jobs:
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
           cat "$REPORT_FILE"
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.11] RUN MAIN PIPELINE
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -390,6 +442,9 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: python3 "Social media/Facebook/Story_video.py"
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.12] UPLOAD ARTIFACT
+      # ═══════════════════════════════════════════════════════════════════════
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -398,12 +453,18 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.13] CLEANUP
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 🧹 Cleanup Public Repo
         if: always()
         run: |
           rm -rf "Social media"
           rm -f Final_FB_Story.mp4
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # [06.14] CACHE STATUS
+      # ═══════════════════════════════════════════════════════════════════════
       - name: 📊 Cache Status
         if: always()
         run: |
