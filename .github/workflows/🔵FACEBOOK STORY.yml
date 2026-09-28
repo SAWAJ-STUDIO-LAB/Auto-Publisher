@@ -1,85 +1,159 @@
-# =========================================================================================
-# 🔵 FACEBOOK STORY — GitHub Actions Workflow (Public Repo, Production Ready v2.0)
-# =========================================================================================
-# Yeh workflow:
-#   1. Public repo checkout karta hai
-#   2. Private repo se Story_video.py fetch karta hai
-#   3. Toolbox (.toolbox) cache se ffmpeg + fonts + pip restore karta hai
-#   4. Script chalata hai
-#   5. Ek hi Telegram report bhejta hai (silent mode ke saath)
-# =========================================================================================
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# 🔵 FACEBOOK STORY — GitHub Actions Workflow (Production Ready v3.0)
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# Features:
+#   1. Public repo checkout
+#   2. Token + repo access debug (fail-fast)
+#   3. Toolbox single cache (.toolbox) — pip + fonts + ffmpeg
+#   4. Private repo se secure script fetch (3-method fallback)
+#   5. Pipeline run with output capture
+#   6. Ek hi Telegram report (18 APIs + errors + duration)
+#   7. Artifact upload + cleanup
+# ═════════════════════════════════════════════════════════════════════════════════════════
 
 name: "🔵 FACEBOOK STORY"
 
-# ---------- Triggers ----------
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# TRIGGERS
+# ─────────────────────────────────────────────────────────────────────────────────────────
 on:
-  # Manual trigger (button dabakar chalane ke liye)
+  # Manual trigger
   workflow_dispatch:
     inputs:
       upload_to_social:
-        description: 'Upload to Facebook Story?'   # Upload karna hai ya nahi?
+        description: 'Upload to Facebook Story?'
         required: true
         type: boolean
         default: false
 
-  # Automatic daily trigger
+  # Auto trigger — roz 5:00 AM IST
   schedule:
-    - cron: '30 23 * * *'   # Roz 5:00 AM IST (23:30 UTC) pe chalega
+    - cron: '30 23 * * *'
 
-# ---------- Permissions ----------
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# PERMISSIONS
+# ─────────────────────────────────────────────────────────────────────────────────────────
 permissions:
-  contents: read          # Public repo me kuch commit nahi karte
-  actions: write          # Cache write karne ke liye
+  contents: read
+  actions: write
 
-# ---------- Concurrency ----------
-# Ek waqt me sirf ek hi workflow chalega, warna cache aur files clash hongi
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# CONCURRENCY — ek waqt me sirf ek run
+# ─────────────────────────────────────────────────────────────────────────────────────────
 concurrency:
   group: facebook-story
-  cancel-in-progress: false    # Purana run complete hone do, cancel nahi karo
+  cancel-in-progress: false
 
-# ---------- Global Environment ----------
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# GLOBAL ENVIRONMENT
+# ─────────────────────────────────────────────────────────────────────────────────────────
 env:
-  PYTHON_VERSION: '3.11'                                  # Python version
-  CACHE_VERSION: 'v1'                                     # Cache version (deps badle to v2 karo)
-  TOOLBOX: ${{ github.workspace }}/.toolbox               # Saare tools ka ek hi folder
-  PIP_CACHE_DIR: ${{ github.workspace }}/.toolbox/pip     # Pip cache path
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'                      # Pip ka version nag skip
-  PIP_NO_INPUT: '1'                                       # Pip ko interactive prompts band
-  XDG_CACHE_HOME: ${{ github.workspace }}/.toolbox/xdg    # General cache path
-  HF_HOME: ${{ github.workspace }}/.toolbox/hf            # HuggingFace models cache
-  PRIVATE_REPO: 'SAWAJ-STUDIO-LAB/admin'                  # Private repo path
-  TELEGRAM_SILENT: 'true'                                 # ✅ Script ko chup karao — sirf 1 final report
+  PYTHON_VERSION: '3.11'
+  CACHE_VERSION: 'v3'                                       # Cache version (deps badle to v4)
+  TOOLBOX: ${{ github.workspace }}/.toolbox                 # Sab tools ek folder me
+  PIP_CACHE_DIR: ${{ github.workspace }}/.toolbox/pip
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_NO_INPUT: '1'
+  XDG_CACHE_HOME: ${{ github.workspace }}/.toolbox/xdg
+  HF_HOME: ${{ github.workspace }}/.toolbox/hf
+  PRIVATE_REPO: 'SAWAJ-STUDIO-LAB/admin'
+  TELEGRAM_SILENT: 'true'                                   # Script chup rakho
 
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# JOBS
+# ═════════════════════════════════════════════════════════════════════════════════════════
 jobs:
   fb-story:
-    runs-on: ubuntu-latest                                # Free runner use kar rahe hain
-    timeout-minutes: 90                                   # Max 90 min tak chalega
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     env:
-      # ✅ FIX: Schedule pe auto TRUE, manual pe user ka choice
+      # Schedule pe AUTO true, manual pe user ka choice
       UPLOAD_TO_SOCIAL: ${{ github.event_name == 'schedule' && 'true' || inputs.upload_to_social }}
 
     steps:
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
       # STEP 1: Public repo checkout
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 📦 Checkout Public Repository
         uses: actions/checkout@v4
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 2: Required secrets validate
-      # Agar koi critical secret missing hai to 20 min waste na karo, turant fail karo
-      # ═══════════════════════════════════════════════════════════════════════════════
-      - name: 🔐 Pre-flight — Required Secrets Check
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 2: 🔍 DEBUG — Token aur repo access verify
+      # Fail-fast — 30 second me pata chal jayega problem kya hai
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      - name: 🔍 Debug — Token & Repo Check
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "🔍 DEBUG INFO"
+          echo "═══════════════════════════════════════════"
+
+          # Token set hai ya nahi
+          if [ -z "$TOKEN_GITHUB" ]; then
+            echo "❌ TOKEN_GITHUB secret KHALI hai!"
+            echo "   → Public repo → Settings → Secrets → Actions me 'TOKEN_GITHUB' set karo"
+            exit 1
+          fi
+
+          echo "✅ TOKEN_GITHUB mil gaya"
+          echo "   Length: ${#TOKEN_GITHUB} chars"
+          echo "   Prefix: ${TOKEN_GITHUB:0:8}***"
+
+          # Token type check
+          case "$TOKEN_GITHUB" in
+            ghp_*)           echo "   Type: Classic PAT (ghp_) — GOOD" ;;
+            github_pat_*)    echo "   Type: Fine-grained PAT — GOOD" ;;
+            gho_*)           echo "   Type: OAuth token (gho_) — KAAM NAHI KAREGA!" ;;
+            ghs_*)           echo "   Type: Server token (ghs_) — KAAM NAHI KAREGA!" ;;
+            *)               echo "   ⚠️ Unknown token format" ;;
+          esac
+
+          echo ""
+          echo "🧪 Test 1: Token valid hai?"
+          HTTP=$(curl -s -o /tmp/whoami.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN_GITHUB" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user)
+
+          if [ "$HTTP" != "200" ]; then
+            echo "❌ Token INVALID hai (HTTP $HTTP)"
+            cat /tmp/whoami.json
+            exit 1
+          fi
+          echo "✅ Token VALID hai"
+          grep -E '"login"' /tmp/whoami.json | head -1
+
+          echo ""
+          echo "🧪 Test 2: Private repo access?"
+          HTTP2=$(curl -s -o /tmp/repo.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN_GITHUB" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ env.PRIVATE_REPO }}")
+
+          if [ "$HTTP2" != "200" ]; then
+            echo "❌ PRIVATE REPO ACCESS FAIL (HTTP $HTTP2)"
+            echo "   Repo: ${{ env.PRIVATE_REPO }}"
+            echo "   → Token me 'repo' scope add karo ya repo name check karo"
+            head -20 /tmp/repo.json
+            exit 1
+          fi
+          echo "✅ Private repo accessible: ${{ env.PRIVATE_REPO }}"
+          echo "═══════════════════════════════════════════"
+
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 3: Pre-flight — critical secrets check
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      - name: 🔐 Pre-flight — Required Secrets
+        env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
         run: |
           missing=()
-          for s in TOKEN_GITHUB TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID FACEBOOK_INSTAGRAM_META_TOKEN FACEBOOK_PAGE_ID; do
+          for s in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID FACEBOOK_INSTAGRAM_META_TOKEN FACEBOOK_PAGE_ID; do
             [ -z "${!s}" ] && missing+=("$s")
           done
           if [ ${#missing[@]} -gt 0 ]; then
@@ -88,11 +162,10 @@ jobs:
           fi
           echo "✅ All critical secrets present"
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 3: Toolbox restore (ek hi cache call)
-      # Ek hi folder me sab: pip + fonts + ffmpeg + caches
-      # ═══════════════════════════════════════════════════════════════════════════════
-      - name: 🗂️ Restore Toolbox (all caches)
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 4: Restore Toolbox (single cache)
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      - name: 🗂️ Restore Toolbox
         id: toolbox-cache
         uses: actions/cache@v4
         with:
@@ -102,27 +175,35 @@ jobs:
             toolbox-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
             toolbox-${{ runner.os }}-
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 4: Python setup
-      # ═══════════════════════════════════════════════════════════════════════════════
+      - name: 📊 Cache Status
+        run: |
+          if [ "${{ steps.toolbox-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "🚀 Toolbox cache HIT — fast path!"
+          else
+            echo "🛠️ Toolbox cache MISS — pehli baar setup (thoda time lagega)"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 5: Python setup
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 5: Toolbox bootstrap (ffmpeg static + custom fonts)
-      # Pehli baar download karega, agli baar cache se aayega
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 6: Bootstrap Toolbox (ffmpeg + fonts)
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 🧰 Bootstrap Toolbox (ffmpeg + fonts)
         run: |
           set -euo pipefail
           mkdir -p "$TOOLBOX/bin" "$TOOLBOX/fonts" "$TOOLBOX/fontcache"
 
-          # ---------- Static FFmpeg (cache-friendly, apt se 25x fast) ----------
+          # ---------- Static FFmpeg ----------
           if [ -x "$TOOLBOX/bin/ffmpeg" ]; then
             echo "✅ ffmpeg cache se mila"
           else
+            echo "⬇️ Static ffmpeg download (one-time)..."
             mkdir -p "$TOOLBOX/tmp"
             if curl -fsSL --retry 3 --connect-timeout 20 \
                 "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" \
@@ -132,14 +213,15 @@ jobs:
               find "$TOOLBOX/tmp" -name 'ffprobe' -type f -exec mv {} "$TOOLBOX/bin/ffprobe" \;
               chmod +x "$TOOLBOX/bin/"* || true
               rm -rf "$TOOLBOX/tmp"
+              echo "✅ ffmpeg ready"
             else
-              # Fallback: apt se install
+              echo "⚠️ Static download fail — apt fallback"
               sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
             fi
           fi
           echo "$TOOLBOX/bin" >> "$GITHUB_PATH"
 
-          # ---------- Custom fonts (Noto family) ----------
+          # ---------- Fonts ----------
           fetch_font() {
             local url="$1" dest="$2"
             [ -s "$dest" ] && return 0
@@ -153,7 +235,7 @@ jobs:
           fetch_font "$BASE/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"       "$TOOLBOX/fonts/NotoNaskhArabic-Regular.ttf"
           fetch_font "$BASE/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"          "$TOOLBOX/fonts/NotoNaskhArabic-Bold.ttf"
 
-          # ---------- Fontconfig: sirf toolbox fonts use karo ----------
+          # ---------- Fontconfig ----------
           cat > "$TOOLBOX/fonts.conf" <<EOF
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
@@ -165,10 +247,11 @@ jobs:
           echo "FONTCONFIG_FILE=$TOOLBOX/fonts.conf" >> "$GITHUB_ENV"
           export FONTCONFIG_FILE="$TOOLBOX/fonts.conf"
           fc-cache -f > /dev/null 2>&1 || true
+          echo "✅ Fonts ready — $(ls -1 "$TOOLBOX/fonts" | wc -l) files"
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 6: Python dependencies install
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 7: Python dependencies
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 🐍 Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -177,32 +260,65 @@ jobs:
             google-api-python-client google-auth-httplib2 google-auth-oauthlib \
             tenacity
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 7: Private repo se script fetch (secure clone)
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 8: Fetch private repo script — 3-method fallback
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
           set -euo pipefail
-          # ✅ FIX: Token URL me nahi, HTTP header me — logs me safe
-          git config --global http.extraheader "AUTHORIZATION: bearer ${TOKEN_GITHUB}"
-          git clone --depth 1 "https://github.com/${PRIVATE_REPO}.git" temp_private_repo
-          git config --global --unset-all http.extraheader || true
 
+          # ── Method 1: x-access-token (most reliable)
+          echo "🔧 Method 1: x-access-token format"
+          if git clone --depth 1 \
+              "https://x-access-token:${TOKEN_GITHUB}@github.com/${{ env.PRIVATE_REPO }}.git" \
+              temp_private_repo 2>&1; then
+            echo "✅ Method 1 SUCCESS"
+          else
+            echo "⚠️ Method 1 failed, trying Method 2..."
+            rm -rf temp_private_repo
+
+            # ── Method 2: token as username
+            echo "🔧 Method 2: token as username"
+            if git clone --depth 1 \
+                "https://${TOKEN_GITHUB}@github.com/${{ env.PRIVATE_REPO }}.git" \
+                temp_private_repo 2>&1; then
+              echo "✅ Method 2 SUCCESS"
+            else
+              echo "⚠️ Method 2 failed, trying Method 3..."
+              rm -rf temp_private_repo
+
+              # ── Method 3: oauth2 format
+              echo "🔧 Method 3: oauth2 format"
+              git clone --depth 1 \
+                "https://oauth2:${TOKEN_GITHUB}@github.com/${{ env.PRIVATE_REPO }}.git" \
+                temp_private_repo
+              echo "✅ Method 3 SUCCESS"
+            fi
+          fi
+
+          # ── Verify script exists
           SRC="temp_private_repo/Social media/Facebook/Story_video.py"
-          [ ! -f "$SRC" ] && { echo "::error::Script nahi mili: $SRC"; exit 1; }
+          if [ ! -f "$SRC" ]; then
+            echo "::error::Script nahi mili private repo me: $SRC"
+            echo "📂 Available files:"
+            find temp_private_repo -maxdepth 4 -type f | head -30
+            exit 1
+          fi
+
           mkdir -p "Social media/Facebook"
           cp "$SRC" "Social media/Facebook/Story_video.py"
           rm -rf temp_private_repo
-          echo "✅ Script mil gayi"
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 8: Main pipeline run (output capture for error report)
-      # ═══════════════════════════════════════════════════════════════════════════════
+          echo "✅ Script mil gayi — $(wc -l < 'Social media/Facebook/Story_video.py') lines"
+
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 9: Run pipeline with output capture
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         id: pipeline
-        continue-on-error: true                              # Fail hone pe bhi aage badho
+        continue-on-error: true
         env:
           # ---------- Telegram ----------
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -227,19 +343,27 @@ jobs:
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY_AI }}
 
           # ---------- Media ----------
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          COVERR_API_KEY: ${{ secrets.COVERR_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+
+          # ---------- Data ----------
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
+          QURAN_API_URL: ${{ secrets.QURAN_API_URL }}
+          PRAYER_TIMES_API_URL: ${{ secrets.PRAYER_TIMES_API_URL }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
 
           # ---------- Workflow signals ----------
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ env.UPLOAD_TO_SOCIAL }}
+          TELEGRAM_SILENT: 'true'
         run: |
           set +e
           START=$(date +%s)
@@ -249,11 +373,11 @@ jobs:
           END=$(date +%s)
           echo "END_TIME=$END" >> $GITHUB_ENV
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          exit 0                                             # Report hamesha jayegi
+          exit 0
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 9: ✅ SINGLE TELEGRAM REPORT (poori detail, ek hi message)
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 10: 📨 Send ONE Telegram Report
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 📨 Send ONE Telegram Report
         if: always()
         env:
@@ -263,6 +387,7 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
           TRIGGER: ${{ github.event_name }}
           CACHE_HIT: ${{ steps.toolbox-cache.outputs.cache-hit }}
+          UPLOAD_TO_SOCIAL: ${{ env.UPLOAD_TO_SOCIAL }}
         run: |
           python3 <<'PYEOF'
           import os, urllib.request, urllib.parse, datetime, pathlib
@@ -286,7 +411,7 @@ jobs:
           end   = int(os.environ.get("END_TIME",   "0") or 0)
           dur   = f"{end-start} sec" if start and end else "—"
 
-          # ---------- Video file check ----------
+          # ---------- Video file ----------
           vf = pathlib.Path("Final_FB_Story.mp4")
           if vf.exists():
               size_mb = round(vf.stat().st_size / 1024 / 1024, 2)
@@ -294,7 +419,7 @@ jobs:
           else:
               video_line = "❌ Not produced"
 
-          # ---------- API status list ----------
+          # ---------- API status (18+ APIs) ----------
           api_list = [
               ("Telegram Bot",   "TELEGRAM_BOT_TOKEN"),
               ("GitHub",         "TOKEN_GITHUB"),
@@ -307,51 +432,57 @@ jobs:
               ("Cerebras AI",    "CEREBRAS_API_KEY"),
               ("Cohere AI",      "COHERE_API_KEY"),
               ("HuggingFace",    "HUGGINGFACE_API_KEY"),
+              ("Tavily",         "TAVILY_API_KEY"),
               ("Jina AI",        "JINA_API_KEY"),
               ("Pexels",         "PEXELS_API_KEY"),
               ("Pixabay",        "PIXABAY_API_KEY"),
+              ("Coverr",         "COVERR_API_KEY"),
               ("FreeSound",      "FREESOUND_API_KEY"),
               ("ElevenLabs",     "ELEVENLABS_API_KEY"),
               ("DeepL",          "DEEPL_API_KEY"),
               ("Hadith API",     "HADITH_API_URL"),
+              ("Quran API",      "QURAN_API_URL"),
+              ("Prayer Times",   "PRAYER_TIMES_API_URL"),
+              ("OpenWeather",    "OPENWEATHER_API_KEY"),
           ]
           api_lines = "\n".join(
               f"{mark(os.environ.get(k))} {name}"
               for name, k in api_list
           )
 
-          # ---------- Error trace from log (agar fail hua) ----------
+          # ---------- Error trace from log ----------
           log_tail = ""
           lp = pathlib.Path("pipeline_output.log")
           if lp.exists() and str(exit_code) != "0":
               lines = lp.read_text(errors="ignore").splitlines()
-              errs = [l for l in lines[-80:] if any(w in l.lower() for w in ["error", "fail", "exception", "traceback"])]
+              errs = [l for l in lines[-100:]
+                      if any(w in l.lower() for w in ["error", "fail", "exception", "traceback"])]
               if errs:
-                  log_tail = "\n".join(errs[-5:])[:800]
+                  log_tail = "\n".join(errs[-5:])[:900]
 
           # ---------- Build report ----------
           now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
           report = f"""🔵 *FACEBOOK STORY REPORT*
-          ━━━━━━━━━━━━━━━━━━━━━━━
-          📅 {now.strftime('%d %b %Y, %I:%M %p IST')}
-          🔢 Run #{run_no}   |   🎬 {trigger}
-          ━━━━━━━━━━━━━━━━━━━━━━━
-          📊 *STATUS:* {status}
-          ⏱️ *Duration:* {dur}
-          📤 *Upload to FB:* {'YES' if upload=='true' else 'NO'}
-          🗂️ *Toolbox cache:* {'HIT ⚡' if cache=='true' else 'MISS 🐢'}
-          🎥 *Video:* {video_line}
-          ━━━━━━━━━━━━━━━━━━━━━━━
-          🔑 *Istemaal Ki Gayi APIs:*
-          {api_lines}
-          ━━━━━━━━━━━━━━━━━━━━━━━"""
+━━━━━━━━━━━━━━━━━━━━━━━
+📅 {now.strftime('%d %b %Y, %I:%M %p IST')}
+🔢 Run #{run_no}   |   🎬 {trigger}
+━━━━━━━━━━━━━━━━━━━━━━━
+📊 *STATUS:* {status}
+⏱️ *Duration:* {dur}
+📤 *Upload to FB:* {'YES' if upload=='true' else 'NO'}
+🗂️ *Toolbox cache:* {'HIT ⚡' if cache=='true' else 'MISS 🐢'}
+🎥 *Video:* {video_line}
+━━━━━━━━━━━━━━━━━━━━━━━
+🔑 *Istemaal Ki Gayi APIs:*
+{api_lines}
+━━━━━━━━━━━━━━━━━━━━━━━"""
 
           if log_tail:
               report += f"\n⚠️ *ERRORS:*\n`{log_tail}`\n━━━━━━━━━━━━━━━━━━━━━━━"
 
           report += "\n🤖 _Auto-generated by GitHub Actions_"
 
-          # ---------- Send to Telegram ----------
+          # ---------- Send ----------
           token = os.environ["TELEGRAM_BOT_TOKEN"]
           chat  = os.environ["TELEGRAM_CHAT_ID"]
           url   = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -368,9 +499,9 @@ jobs:
               print("❌ Telegram send failed:", e)
           PYEOF
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 10: Video artifact upload
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 11: Artifact upload
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 📤 Upload Video Artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -380,9 +511,32 @@ jobs:
           retention-days: 5
           if-no-files-found: warn
 
-      # ═══════════════════════════════════════════════════════════════════════════════
-      # STEP 11: Cleanup
-      # ═══════════════════════════════════════════════════════════════════════════════
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 12: Job Summary
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      - name: 📊 Job Summary
+        if: always()
+        run: |
+          {
+            echo "## 🔵 Facebook Story Pipeline"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Status | \`${{ job.status }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Upload to Social | \`${{ env.UPLOAD_TO_SOCIAL }}\` |"
+            echo "| Toolbox cache hit | \`${{ steps.toolbox-cache.outputs.cache-hit }}\` |"
+            echo "| Pipeline exit code | \`${{ steps.pipeline.outputs.exit_code }}\` |"
+            if [ -f Final_FB_Story.mp4 ]; then
+              echo "| Video size | $(du -h Final_FB_Story.mp4 | cut -f1) |"
+            else
+              echo "| Video | ❌ not produced |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ═══════════════════════════════════════════════════════════════════════════════════
+      # STEP 13: Cleanup
+      # ═══════════════════════════════════════════════════════════════════════════════════
       - name: 🧹 Cleanup Workspace
         if: always()
         run: |
