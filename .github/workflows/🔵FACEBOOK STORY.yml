@@ -1,0 +1,132 @@
+name: "🔵FACEBOOK STORY (Public Runner)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_social:
+        description: 'Upload to Facebook Story?'
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: '30 23 * * *'   # 5:00 AM IST
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: facebook-story
+  cancel-in-progress: false
+
+jobs:
+  fb-story:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Public Repository
+        uses: actions/checkout@v4
+
+      - name: 📥 Fetch Code from Private Repository
+        env:
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+        run: |
+          # Yahan apni private repo ka naam daalein
+          PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
+          
+          echo "Private repository se script laa rahe hain..."
+          git clone https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
+          
+          # Folder structure banakar sirf zaroori .py file copy kar rahe hain
+          mkdir -p "Social media/Facebook"
+          cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
+          
+          # Clone kiye gaye baaki saare data ko turant delete kar do
+          rm -rf temp_private_repo
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Python Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-fb-story-v2
+          restore-keys: |
+            ${{ runner.os }}-pip-fb-story-
+
+      - name: Cache Custom Fonts
+        id: cache-fonts
+        uses: actions/cache@v4
+        with:
+          path: ~/.fonts
+          key: ${{ runner.os }}-custom-fonts-fb-story-v2
+
+      - name: Install System Setup (FFmpeg)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
+
+      - name: Download Custom Fonts (only if cache miss)
+        if: steps.cache-fonts.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.fonts
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf" -O ~/.fonts/NotoSans-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O ~/.fonts/NotoSansDevanagari-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
+
+      - name: Install Python Packages & Refresh Fonts
+        run: |
+          fc-cache -f -v
+          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: 🚀 Run Facebook Story Pipeline
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
+          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
+          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
+        run: python3 "Social media/Facebook/Story_video.py"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fb-story-video
+          path: Final_FB_Story.mp4
+          retention-days: 5
+          if-no-files-found: ignore
+
+      - name: 🧹 Clean Up Public Repository (Security)
+        if: always()
+        run: |
+          echo "Public repo se private files delete kar rahe hain..."
+          rm -rf "Social media"
+          rm -f Final_FB_Story.mp4
+          echo "✅ Repository ekdam clean ho gayi hai!"
