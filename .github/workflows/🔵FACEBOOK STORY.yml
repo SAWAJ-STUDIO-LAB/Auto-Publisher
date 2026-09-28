@@ -42,11 +42,18 @@ jobs:
           
           rm -rf temp_private_repo
 
-      - name: Setup Python & 'Toll' (Cache) for Tools
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip' # Yeh automatic pip tools ka 'Toll' folder banayega aur manage karega
+
+      - name: 🗂️ Setup 'Toll' (Cache) for Python Pip Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-fb-story-tools-v3
+          restore-keys: |
+            ${{ runner.os }}-pip-fb-story-tools-
 
       - name: 🗂️ Setup 'Toll' Folder for Fonts
         id: cache-fonts
@@ -71,10 +78,10 @@ jobs:
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
 
-      - name: Refresh Fonts & Auto-Upgrade Python Tools
+      - name: Refresh Fonts & Auto-Upgrade Python Tools (Toll Usage)
         run: |
           fc-cache -f -v
-          # --upgrade lagane se purane tools cache se aayenge aur naye versions automatically update ho jayenge
+          # Yeh Toll folder se packages uthayega aur naye version ko automatic upgrade karega
           pip install --upgrade requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
       - name: 🚀 Run Facebook Story Pipeline
