@@ -24,68 +24,131 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    env:
+      CACHE_VERSION: v3
+      DEPS_DIR: ${{ github.workspace }}/.dependencies
+
     steps:
       - name: Checkout Public Repository
         uses: actions/checkout@v4
 
+      # ============================================================
+      # 🧠 MASTER CACHE — Sab kuch ek saath store/restore
+      # ============================================================
+      - name: 🗂️ Restore Master Dependencies Cache
+        id: master-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .dependencies
+            ~/.cache/pip
+          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+          restore-keys: |
+            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-master-
+
+      - name: 📁 Prepare Dependencies Folder
+        run: |
+          mkdir -p "$DEPS_DIR/bin"
+          mkdir -p "$DEPS_DIR/fonts"
+          mkdir -p "$DEPS_DIR/python-venv"
+          echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
+          echo "✅ Dependencies folder ready: $DEPS_DIR"
+
+      # ============================================================
+      # 📥 Private repo se code fetch
+      # ============================================================
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
-          # Yahan apni private repo ka naam daalein
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
-          
-          echo "Private repository se script laa rahe hain..."
-          git clone https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
-          
-          # Folder structure banakar sirf zaroori .py file copy kar rahe hain
+          echo "🔐 Private repository se script laa rahe hain..."
+          git clone --depth 1 https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
           mkdir -p "Social media/Facebook"
           cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
-          
-          # Clone kiye gaye baaki saare data ko turant delete kar do
           rm -rf temp_private_repo
+          echo "✅ Script successfully copy ho gayi!"
 
-      - name: Setup Python
+      # ============================================================
+      # 🐍 Python Setup
+      # ============================================================
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Cache Python Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-fb-story-v2
-          restore-keys: |
-            ${{ runner.os }}-pip-fb-story-
-
-      - name: Cache Custom Fonts
-        id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-custom-fonts-fb-story-v2
-
-      - name: Install System Setup (FFmpeg)
+      # ============================================================
+      # 🎬 FFmpeg + System Fonts (cache-aware)
+      # ============================================================
+      - name: 🎬 Setup FFmpeg & System Fonts (Cache-Aware)
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
+          if [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/.ffmpeg_installed" ]; then
+            echo "⚡ FFmpeg already cached hai — skip installation!"
+            sudo mkdir -p /usr/local/bin
+            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
+            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null || true
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe 2>/dev/null || true
+          else
+            echo "📥 FFmpeg install kar rahe hain (pehli baar)..."
+            sudo apt-get update -q
+            sudo apt-get install -y -q ffmpeg \
+              fonts-noto fonts-noto-core fonts-noto-extra \
+              fonts-noto-ui-core fonts-dejavu-core \
+              fonts-noto-color-emoji fontconfig
+            cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
+            cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null || true
+            touch "$DEPS_DIR/.ffmpeg_installed"
+            echo "✅ FFmpeg install + cache ho gaya!"
+          fi
+          ffmpeg -version | head -1
 
-      - name: Download Custom Fonts (only if cache miss)
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
+      # ============================================================
+      # 🔤 Custom Fonts (cache-aware)
+      # ============================================================
+      - name: 🔤 Download Custom Fonts (only if not cached)
         run: |
+          if [ -f "$DEPS_DIR/.fonts_installed" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null)" ]; then
+            echo "⚡ Custom fonts already cached hain — download skip!"
+          else
+            echo "📥 Custom fonts download kar rahe hain (pehli baar)..."
+            mkdir -p "$DEPS_DIR/fonts"
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"      -O "$DEPS_DIR/fonts/NotoSans-Regular.ttf" || true
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"         -O "$DEPS_DIR/fonts/NotoSans-Bold.ttf" || true
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O "$DEPS_DIR/fonts/NotoSansDevanagari-Regular.ttf" || true
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"    -O "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" || true
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"       -O "$DEPS_DIR/fonts/NotoNaskhArabic-Regular.ttf" || true
+            wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"          -O "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" || true
+            touch "$DEPS_DIR/.fonts_installed"
+            echo "✅ Custom fonts download + cache ho gaye!"
+          fi
           mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf" -O ~/.fonts/NotoSans-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O ~/.fonts/NotoSansDevanagari-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
+          cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          fc-cache -f > /dev/null 2>&1 || true
 
-      - name: Install Python Packages & Refresh Fonts
+      # ============================================================
+      # 🐍 Python Packages (venv-based — fastest)
+      # ============================================================
+      - name: 🐍 Install Python Packages (Cache-Aware)
         run: |
-          fc-cache -f -v
-          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+          VENV_PATH="$DEPS_DIR/python-venv"
+          if [ -f "$VENV_PATH/.installed" ]; then
+            echo "⚡ Python packages already cached hain — pip install skip!"
+          else
+            echo "📥 Python packages install kar rahe hain (pehli baar)..."
+            python3 -m venv "$VENV_PATH"
+            "$VENV_PATH/bin/pip" install --upgrade pip --quiet
+            "$VENV_PATH/bin/pip" install --no-cache-dir \
+              requests edge-tts mutagen Pillow \
+              google-api-python-client google-auth-httplib2 google-auth-oauthlib
+            touch "$VENV_PATH/.installed"
+            echo "✅ Python packages install + cache ho gaye!"
+          fi
+          echo "$VENV_PATH/bin" >> $GITHUB_PATH
 
+      # ============================================================
+      # 🚀 Main Script Run
+      # ============================================================
       - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -113,8 +176,12 @@ jobs:
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
+          FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
         run: python3 "Social media/Facebook/Story_video.py"
 
+      # ============================================================
+      # 📤 Artifact Upload
+      # ============================================================
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -123,10 +190,28 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
+      # ============================================================
+      # 🧹 Public Repo Cleanup (Security)
+      # ============================================================
       - name: 🧹 Clean Up Public Repository (Security)
         if: always()
         run: |
-          echo "Public repo se private files delete kar rahe hain..."
+          echo "🔒 Public repo se private files delete kar rahe hain..."
           rm -rf "Social media"
           rm -f Final_FB_Story.mp4
           echo "✅ Repository ekdam clean ho gayi hai!"
+
+      # ============================================================
+      # 📊 Cache Status Report
+      # ============================================================
+      - name: 📊 Cache Status Report
+        if: always()
+        run: |
+          echo "============================================"
+          echo "📊 CACHE STATUS REPORT"
+          echo "============================================"
+          echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          echo "FFmpeg Cached: $([ -f $DEPS_DIR/bin/ffmpeg ] && echo '✅ Yes' || echo '❌ No')"
+          echo "Fonts Cached: $([ -f $DEPS_DIR/.fonts_installed ] && echo '✅ Yes' || echo '❌ No')"
+          echo "Python Venv Cached: $([ -f $DEPS_DIR/python-venv/.installed ] && echo '✅ Yes' || echo '❌ No')"
+          echo "============================================"
