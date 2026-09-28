@@ -25,19 +25,13 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v11
+      CACHE_VERSION: v12
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
-      # ═══════════════════════════════════════════════════════════════
-      # [01] CHECKOUT
-      # ═══════════════════════════════════════════════════════════════
       - name: Checkout Public Repository
         uses: actions/checkout@v4
 
-      # ═══════════════════════════════════════════════════════════════
-      # [02] RESTORE MASTER CACHE
-      # ═══════════════════════════════════════════════════════════════
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
         uses: actions/cache@v4
@@ -51,17 +45,11 @@ jobs:
             ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
-      # ═══════════════════════════════════════════════════════════════
-      # [03] PREPARE DEPS FOLDER
-      # ═══════════════════════════════════════════════════════════════
       - name: 📁 Prepare Dependencies Folder
         run: |
           mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
 
-      # ═══════════════════════════════════════════════════════════════
-      # [04] FETCH PRIVATE CODE
-      # ═══════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
@@ -72,17 +60,11 @@ jobs:
           cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
           rm -rf temp_private_repo
 
-      # ═══════════════════════════════════════════════════════════════
-      # [05] SETUP PYTHON
-      # ═══════════════════════════════════════════════════════════════
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ═══════════════════════════════════════════════════════════════
-      # [06] FFMPEG + SOX + SYSTEM FONTS
-      # ═══════════════════════════════════════════════════════════════
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
@@ -90,32 +72,24 @@ jobs:
 
           if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
             echo "⚡ Restoring FFmpeg + SoX from cache..."
-
             if [ -d "$LIB_DIR" ]; then
               sudo mkdir -p /usr/lib/x86_64-linux-gnu
               sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
               sudo ldconfig
             fi
-
             sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg 2>/dev/null || true
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null || true
             sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox 2>/dev/null || true
             sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox 2>/dev/null || true
-
-            if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
-              sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
-              sudo chmod +x /usr/local/bin/espeak-ng
-            fi
-
+            [ -f "$DEPS_DIR/bin/espeak-ng" ] && sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng && sudo chmod +x /usr/local/bin/espeak-ng
             if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
               sudo mkdir -p /usr/share/fonts/truetype
               sudo cp -rn "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
               sudo fc-cache -f > /dev/null 2>&1 || true
             fi
-
             if ffmpeg -version >/dev/null 2>&1 && sox --version >/dev/null 2>&1; then
-              echo "✅ Cache verified — FFmpeg + SoX working"
+              echo "✅ Cache verified"
             else
               echo "⚠️ Cache broken — reinstalling"
               rm -f "$MARKER"
@@ -126,7 +100,7 @@ jobs:
               sudo ldconfig
             fi
           else
-            echo "📥 Fresh install of FFmpeg + SoX + espeak-ng..."
+            echo "📥 Fresh install..."
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
@@ -135,7 +109,6 @@ jobs:
           fi
 
           mkdir -p "$DEPS_DIR/bin" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
-
           cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg" 2>/dev/null || true
           cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null || true
           cp "$(which sox)" "$DEPS_DIR/bin/sox" 2>/dev/null || true
@@ -144,46 +117,40 @@ jobs:
           for bin in ffmpeg ffprobe sox; do
             LDD=$(ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}')
             for lib in $LDD; do
-              if [ -f "$lib" ]; then
-                cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
-              fi
+              [ -f "$lib" ] && cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
             done
           done
-
           for libglob in /usr/lib/x86_64-linux-gnu/libav*.so* \
                          /usr/lib/x86_64-linux-gnu/libsw*.so* \
                          /usr/lib/x86_64-linux-gnu/libpostproc*.so* \
                          /usr/lib/x86_64-linux-gnu/libsox*.so*; do
-            if [ -f "$libglob" ]; then
-              cp -n "$libglob" "$LIB_DIR/" 2>/dev/null || true
-            fi
+            [ -f "$libglob" ] && cp -n "$libglob" "$LIB_DIR/" 2>/dev/null || true
           done
 
           cp -rn /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
-
           touch "$MARKER"
-          echo "=== VERIFY ==="
           ffmpeg -version 2>&1 | head -1
           sox --version 2>&1 | head -1
           echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
-      # ═══════════════════════════════════════════════════════════════
-      # [07] CUSTOM FONTS — with FORCE re-download
-      # ═══════════════════════════════════════════════════════════════
+      # ═══ FONTS — with integrity verification ═══
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
           FORCE_DOWNLOAD=0
-          if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-            echo "⚠️ NotoEmoji-Regular.ttf missing"
-            FORCE_DOWNLOAD=1
-          fi
-          if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ]; then
-            echo "⚠️ NotoEmoji-Bold.ttf missing"
-            FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ] && FORCE_DOWNLOAD=1
+
+          # ✅ Size check — emoji font should be > 100KB
+          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
+            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" 2>/dev/null || echo 0)
+            if [ "$SZ" -lt 100000 ]; then
+              echo "⚠️ NotoEmoji-Regular.ttf too small ($SZ bytes) — forcing re-download"
+              FORCE_DOWNLOAD=1
+            fi
           fi
 
           if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
-            echo "⚡ Custom fonts CACHED — all present"
+            echo "⚡ Custom fonts CACHED"
           else
             echo "📥 Downloading fonts (force=$FORCE_DOWNLOAD)..."
             rm -rf "$DEPS_DIR/fonts"
@@ -196,9 +163,9 @@ jobs:
               ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
               ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
-              ["NotoEmoji-Regular.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf"
-              ["NotoEmoji-Bold.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Bold.ttf"
-              ["NotoColorEmoji.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf"
+              ["NotoEmoji-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf"
+              ["NotoEmoji-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Bold.ttf"
+              ["NotoColorEmoji.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf"
             )
 
             for name in "${!FONTS[@]}"; do
@@ -206,13 +173,22 @@ jobs:
               wget -q --timeout=45 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
 
-            if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-              echo "❌ GitHub failed — trying jsDelivr alternate"
-              wget -q --timeout=45 "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf" -O "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" || true
-            fi
-
             echo "=== Downloaded files ==="
             ls -la "$DEPS_DIR/fonts/"
+
+            # ✅ Verify sizes
+            for f in NotoEmoji-Regular.ttf NotoEmoji-Bold.ttf NotoSans-Bold.ttf; do
+              if [ -f "$DEPS_DIR/fonts/$f" ]; then
+                SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
+                echo "  $f: $SZ bytes"
+                if [ "$SZ" -lt 50000 ]; then
+                  echo "  ⚠️ Too small — downloading alternate"
+                  if [ "$f" = "NotoEmoji-Regular.ttf" ]; then
+                    wget -q --timeout=60 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoEmoji-Regular.ttf" -O "$DEPS_DIR/fonts/$f" || true
+                  fi
+                fi
+              fi
+            done
 
             touch "$DEPS_DIR/.fonts_ok"
           fi
@@ -223,18 +199,32 @@ jobs:
 
           echo "=== ~/.fonts contents ==="
           ls -la ~/.fonts/
-
-          echo "=== Emoji fonts found ==="
           find ~/.fonts -name "*Emoji*.ttf" 2>/dev/null
-          find /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | head -5
 
-      # ═══════════════════════════════════════════════════════════════
-      # [08] PYTHON PACKAGES
-      # ═══════════════════════════════════════════════════════════════
+          # ✅ FONT VALIDITY TEST
+          echo "=== FONT VALIDITY TEST ==="
+          python3 -c "
+from PIL import Image, ImageDraw, ImageFont
+import os
+paths = ['$HOME/.fonts/NotoEmoji-Regular.ttf', '$DEPS_DIR/fonts/NotoEmoji-Regular.ttf']
+for p in paths:
+    if os.path.exists(p):
+        sz = os.path.getsize(p)
+        try:
+            f = ImageFont.truetype(p, 40)
+            img = Image.new('RGBA', (100,100), (0,0,0,0))
+            ImageDraw.Draw(img).text((50,50), '\u2728', fill=(255,255,255,255), font=f, anchor='mm')
+            bb = img.getbbox()
+            print(f'  {\"OK\" if bb else \"EMPTY\"}: {p} ({sz} bytes, bbox={bb})')
+        except Exception as e:
+            print(f'  FAIL: {p} ({sz} bytes): {e}')
+    else:
+        print(f'  MISSING: {p}')
+" || echo "Python validation skipped"
+
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
           VENV="$DEPS_DIR/python-venv"
-
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
             echo "⚡ Python packages CACHED"
           else
@@ -242,48 +232,33 @@ jobs:
             rm -rf "$VENV"
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
-
             "$VENV/bin/pip" install --no-cache-dir \
               requests edge-tts mutagen Pillow \
               google-api-python-client google-auth-httplib2 google-auth-oauthlib \
               gTTS piper-tts numpy scipy soundfile
-
             touch "$VENV/.installed"
           fi
-
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ═══════════════════════════════════════════════════════════════
-      # [09] PIPER MODELS
-      # ═══════════════════════════════════════════════════════════════
       - name: 🎙️ Piper Models (Cache-Aware)
         run: |
           P="$DEPS_DIR/piper"
-
           if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
             echo "⚡ Piper models CACHED"
           else
             echo "📥 Piper models download..."
             rm -rf "$P" && mkdir -p "$P"
             cd "$P"
-
             BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-
-            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"      -O hi_IN-pratham-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx || true
             wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
-
-            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"      -O hi_IN-priyamvada-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx" -O hi_IN-priyamvada-medium.onnx || true
             wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json || true
-
             touch "$P/.installed"
             cd "$GITHUB_WORKSPACE"
           fi
-
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ═══════════════════════════════════════════════════════════════
-      # [10] HEALTH CHECK — with tri-lingual debug
-      # ═══════════════════════════════════════════════════════════════
       - name: 🔍 Master Tool Health Check
         id: health
         run: |
@@ -291,7 +266,6 @@ jobs:
           echo "{" > "$REPORT_FILE"
           echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
           echo "  \"tools\": {" >> "$REPORT_FILE"
-
           FIRST=1
           add_entry() {
             local name="$1"; local status="$2"; local detail="$3"
@@ -301,141 +275,57 @@ jobs:
             echo "[HEALTH] $name → $status ($detail)"
           }
 
-          if command -v ffmpeg >/dev/null 2>&1; then
-            V=$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3)
-            add_entry "ffmpeg" "ok" "$V"
-          else add_entry "ffmpeg" "fail" "not found"; fi
+          command -v ffmpeg >/dev/null 2>&1 && add_entry "ffmpeg" "ok" "$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3)" || add_entry "ffmpeg" "fail" "not found"
+          command -v ffprobe >/dev/null 2>&1 && add_entry "ffprobe" "ok" "present" || add_entry "ffprobe" "fail" "not found"
+          command -v sox >/dev/null 2>&1 && add_entry "sox" "ok" "$(sox --version 2>&1 | head -1 | cut -d' ' -f2)" || add_entry "sox" "fail" "not found"
+          command -v espeak-ng >/dev/null 2>&1 && add_entry "espeak-ng" "ok" "present" || add_entry "espeak-ng" "fail" "not found"
+          command -v edge-tts >/dev/null 2>&1 && add_entry "edge-tts" "ok" "present" || add_entry "edge-tts" "fail" "not found"
+          command -v gtts-cli >/dev/null 2>&1 && add_entry "gtts" "ok" "present" || add_entry "gtts" "fail" "not found"
+          command -v piper >/dev/null 2>&1 && add_entry "piper-cli" "ok" "present" || add_entry "piper-cli" "fail" "not found"
 
-          if command -v ffprobe >/dev/null 2>&1; then
-            add_entry "ffprobe" "ok" "present"
-          else add_entry "ffprobe" "fail" "not found"; fi
-
-          if command -v sox >/dev/null 2>&1; then
-            V=$(sox --version 2>&1 | head -1 | cut -d' ' -f2)
-            add_entry "sox" "ok" "$V"
-          else add_entry "sox" "fail" "not found"; fi
-
-          if command -v espeak-ng >/dev/null 2>&1; then
-            add_entry "espeak-ng" "ok" "present"
-          else add_entry "espeak-ng" "fail" "not found"; fi
-
-          if command -v edge-tts >/dev/null 2>&1; then
-            V=$(edge-tts --version 2>&1 | head -1 || echo "present")
-            add_entry "edge-tts" "ok" "$V"
-          else add_entry "edge-tts" "fail" "not found"; fi
-
-          if command -v gtts-cli >/dev/null 2>&1; then
-            add_entry "gtts" "ok" "present"
-          else add_entry "gtts" "fail" "not found"; fi
-
-          if command -v piper >/dev/null 2>&1; then
-            add_entry "piper-cli" "ok" "present"
-          else add_entry "piper-cli" "fail" "not found"; fi
-
-          if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then
-            SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1)
-            add_entry "piper-model-pratham" "ok" "$SZ"
-          else add_entry "piper-model-pratham" "fail" "missing"; fi
-
-          if [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ]; then
-            SZ=$(du -h "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" | cut -f1)
-            add_entry "piper-model-priyamvada" "ok" "$SZ"
-          else add_entry "piper-model-priyamvada" "fail" "missing"; fi
+          [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ] && add_entry "piper-model-pratham" "ok" "$(du -h $DEPS_DIR/piper/hi_IN-pratham-medium.onnx | cut -f1)" || add_entry "piper-model-pratham" "fail" "missing"
+          [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ] && add_entry "piper-model-priyamvada" "ok" "$(du -h $DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx | cut -f1)" || add_entry "piper-model-priyamvada" "fail" "missing"
 
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
-          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-            SZ=$(du -h "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" | cut -f1)
-            add_entry "noto-emoji-font" "ok" "$SZ"
-          else
-            add_entry "noto-emoji-font" "fail" "missing"
-          fi
+          for f in NotoEmoji-Regular.ttf NotoEmoji-Bold.ttf NotoColorEmoji.ttf; do
+            if [ -f "$DEPS_DIR/fonts/$f" ]; then
+              SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
+              add_entry "font-$f" "ok" "$SZ bytes"
+            else
+              add_entry "font-$f" "fail" "missing"
+            fi
+          done
 
-          if [ -f "$DEPS_DIR/fonts/NotoColorEmoji.ttf" ]; then
-            SZ=$(du -h "$DEPS_DIR/fonts/NotoColorEmoji.ttf" | cut -f1)
-            add_entry "noto-color-emoji" "ok" "$SZ"
-          else
-            add_entry "noto-color-emoji" "hold" "not present"
-          fi
-
-          if [ -f "$HOME/.fonts/NotoEmoji-Regular.ttf" ]; then
-            add_entry "emoji-in-home" "ok" "copied"
-          else
-            add_entry "emoji-in-home" "fail" "not copied"
-          fi
-
-          SFC=$(fc-list 2>/dev/null | wc -l)
-          add_entry "system-fonts" "ok" "$SFC fonts"
-
-          if fc-list 2>/dev/null | grep -qi "NotoEmoji"; then
-            add_entry "fc-emoji-visible" "ok" "fc-list sees emoji"
-          else
-            add_entry "fc-emoji-visible" "warn" "fc-list doesn't see emoji"
-          fi
-
-          # ═══ DEEP EMOJI DEBUG ═══
-          EMOJI_USER=$(find ~/.fonts -name "*Emoji*.ttf" 2>/dev/null | wc -l)
-          EMOJI_SYS=$(find /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | wc -l)
-          EMOJI_DEPS=$(find "$DEPS_DIR/fonts" -name "*Emoji*.ttf" 2>/dev/null | wc -l)
-          add_entry "emoji-usr" "ok" "$EMOJI_USER files"
-          add_entry "emoji-sys" "ok" "$EMOJI_SYS files"
-          add_entry "emoji-deps" "ok" "$EMOJI_DEPS files"
-
-          EMOJI_PATHS=$(find ~/.fonts "$DEPS_DIR/fonts" /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | head -3 | tr '\n' '|')
-          if [ -n "$EMOJI_PATHS" ]; then
-            add_entry "emoji-paths" "ok" "$EMOJI_PATHS"
-          else
-            add_entry "emoji-paths" "fail" "no emoji fonts found"
-          fi
-
-          if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
-            add_entry "python-venv" "ok" "installed"
-          else add_entry "python-venv" "fail" "missing"; fi
-
+          [ -f "$DEPS_DIR/python-venv/.installed" ] && add_entry "python-venv" "ok" "installed" || add_entry "python-venv" "fail" "missing"
           LIBS=$(ls -1 "$DEPS_DIR/libs" 2>/dev/null | wc -l)
           add_entry "cached-libs" "ok" "$LIBS .so files"
 
-          # ✅ NEW: Tri-lingual layout debug
-          add_entry "layout-mode" "ok" "tri-lingual-line"
-          add_entry "word-sync" "ok" "voice-synced"
-
           for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
                      CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
-                     ELEVENLABS_API_KEY \
-                     DEEPL_API_KEY FREESOUND_API_KEY PEXELS_API_KEY PIXABAY_API_KEY \
-                     COVERR_API_KEY \
+                     ELEVENLABS_API_KEY DEEPL_API_KEY FREESOUND_API_KEY \
+                     PEXELS_API_KEY PIXABAY_API_KEY COVERR_API_KEY \
                      TELEGRAM_BOT_TOKEN FACEBOOK_INSTAGRAM_META_TOKEN; do
-            if [ -n "${!key:-}" ]; then
-              add_entry "key:$key" "ok" "configured"
-            else
-              add_entry "key:$key" "hold" "not set"
-            fi
+            [ -n "${!key:-}" ] && add_entry "key:$key" "ok" "configured" || add_entry "key:$key" "hold" "not set"
           done
 
           echo "  }" >> "$REPORT_FILE"
           echo "}" >> "$REPORT_FILE"
-
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
           cat "$REPORT_FILE"
 
-      # ═══════════════════════════════════════════════════════════════
-      # [11] RUN PIPELINE
-      # ═══════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
-
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
@@ -443,18 +333,13 @@ jobs:
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
-
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
           COVERR_API_KEY: ${{ secrets.COVERR_API_KEY }}
-
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
@@ -463,9 +348,6 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: python3 "Social media/Facebook/Story_video.py"
 
-      # ═══════════════════════════════════════════════════════════════
-      # [12] UPLOAD ARTIFACT
-      # ═══════════════════════════════════════════════════════════════
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -474,21 +356,15 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
-      # ═══════════════════════════════════════════════════════════════
-      # [13] CLEANUP
-      # ═══════════════════════════════════════════════════════════════
       - name: 🧹 Cleanup Public Repo
         if: always()
         run: |
           rm -rf "Social media"
           rm -f Final_FB_Story.mp4
 
-      # ═══════════════════════════════════════════════════════════════
-      # [14] CACHE STATUS
-      # ═══════════════════════════════════════════════════════════════
       - name: 📊 Cache Status
         if: always()
         run: |
-          echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
           ls -1 $DEPS_DIR/libs 2>/dev/null | wc -l
