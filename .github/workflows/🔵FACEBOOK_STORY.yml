@@ -1,0 +1,239 @@
+name: "🔵FACEBOOK STORY v7 CLEANED"
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_social:
+        description: 'Upload to Facebook Story?'
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: '30 23 * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: facebook-story
+  cancel-in-progress: false
+
+jobs:
+  fb-story:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CACHE_VERSION: v7
+      DEPS_DIR: ${{ github.workspace }}/.dependencies
+
+    steps:
+      - name: Checkout Public Repository
+        uses: actions/checkout@v4
+
+      - name: 🗂️ Restore Master Dependencies Cache
+        id: master-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .dependencies
+            ~/.cache/pip
+            ~/.local/share/piper
+          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-master-
+
+      - name: 📁 Prepare Dependencies Folder
+        run: |
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
+          echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
+
+      - name: 📥 Fetch Code from Private Repository
+        env:
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+        run: |
+          PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
+          git clone --depth 1 https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
+          mkdir -p "Social media/Facebook"
+          cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
+          rm -rf temp_private_repo
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
+        run: |
+          MARKER="$DEPS_DIR/.ffmpeg_ok"
+          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ]; then
+            echo "⚡ CACHED"
+            sudo mkdir -p /usr/local/bin
+            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
+            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
+            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox
+            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
+              sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
+              sudo fc-cache -f > /dev/null 2>&1 || true
+            fi
+            if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
+              sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
+              sudo chmod +x /usr/local/bin/espeak-ng
+            fi
+          else
+            echo "📥 Installing..."
+            sudo apt-get update -q
+            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+            cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
+            cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe"
+            cp "$(which sox)" "$DEPS_DIR/bin/sox"
+            cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
+            mkdir -p "$DEPS_DIR/system-fonts/truetype"
+            cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
+            touch "$MARKER"
+          fi
+          ffmpeg -version | head -1
+
+      - name: 🔤 Custom Fonts (Cache-Aware)
+        run: |
+          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
+            echo "⚡ Fonts CACHED"
+          else
+            echo "📥 Downloading fonts..."
+            mkdir -p "$DEPS_DIR/fonts"
+            declare -A FONTS=(
+              ["NotoSans-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
+              ["NotoSans-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
+              ["NotoSansDevanagari-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"
+              ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
+              ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
+              ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
+            )
+            for name in "${!FONTS[@]}"; do
+              wget -q --timeout=30 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
+            done
+            touch "$DEPS_DIR/.fonts_ok"
+          fi
+          mkdir -p ~/.fonts
+          cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          fc-cache -f > /dev/null 2>&1 || true
+
+      - name: 🐍 Python Packages (Cache-Aware)
+        run: |
+          VENV="$DEPS_DIR/python-venv"
+          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
+            echo "⚡ Python CACHED"
+          else
+            echo "📥 Installing Python packages..."
+            rm -rf "$VENV"
+            python3 -m venv "$VENV"
+            "$VENV/bin/pip" install --upgrade pip --quiet
+            "$VENV/bin/pip" install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib gTTS piper-tts numpy scipy soundfile
+            touch "$VENV/.installed"
+          fi
+          echo "$VENV/bin" >> $GITHUB_PATH
+
+      - name: 🎙️ Piper Models (Cache-Aware)
+        run: |
+          P="$DEPS_DIR/piper"
+          if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
+            echo "⚡ Piper CACHED"
+          else
+            echo "📥 Downloading Piper models..."
+            rm -rf "$P" && mkdir -p "$P"
+            cd "$P"
+            BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
+            touch "$P/.installed"
+            cd "$GITHUB_WORKSPACE"
+          fi
+          echo "PIPER_DIR=$P" >> $GITHUB_ENV
+
+      - name: 🔍 Master Tool Health Check
+        id: health
+        run: |
+          REPORT_FILE="$DEPS_DIR/tools_status.json"
+          echo "{" > "$REPORT_FILE"
+          echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
+          echo "  \"tools\": {" >> "$REPORT_FILE"
+          FIRST=1
+          add_entry() {
+            local name="$1"; local status="$2"; local detail="$3"
+            if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
+            FIRST=0
+            printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
+            echo "[HEALTH] $name → $status"
+          }
+          if command -v ffmpeg >/dev/null 2>&1; then V=$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3); add_entry "ffmpeg" "ok" "$V"; else add_entry "ffmpeg" "fail" "not found"; fi
+          if command -v ffprobe >/dev/null 2>&1; then add_entry "ffprobe" "ok" "present"; else add_entry "ffprobe" "fail" "not found"; fi
+          if command -v sox >/dev/null 2>&1; then V=$(sox --version 2>&1 | head -1); add_entry "sox" "ok" "$V"; else add_entry "sox" "fail" "not found"; fi
+          if command -v edge-tts >/dev/null 2>&1; then add_entry "edge-tts" "ok" "present"; else add_entry "edge-tts" "fail" "not found"; fi
+          if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1); add_entry "piper-model-pratham" "ok" "$SZ"; else add_entry "piper-model-pratham" "fail" "missing"; fi
+          FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l); add_entry "custom-fonts" "ok" "$FC files"
+          if [ -f "$DEPS_DIR/python-venv/.installed" ]; then add_entry "python-venv" "ok" "installed"; else add_entry "python-venv" "fail" "missing"; fi
+          # ONLY YOUR KEYS - CLEANED LIST
+          for key in CEREBRAS_API_KEY_AI COHERE_API_KEY_AI COVERR_API_KEY DEEPL_API_KEY ELEVENLABS_API_KEY FACEBOOK_INSTAGRAM_META_TOKEN FACEBOOK_PAGE_ID FREESOUND_API_KEY GEMINI_API_KEY_AI GOOGLE_DRIVE_CLIENT_ID GOOGLE_DRIVE_CLIENT_SECRET GOOGLE_DRIVE_REFRESH_TOKEN GROQ_API_KEY_AI HADITH_API_URL HUGGINGFACE_API_KEY_AI JINA_API_KEY MISTRAL_API_KEY_AI OPENROUTER_API_KEY_AI PEXELS_API_KEY PIXABAY_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID TOKEN_GITHUB; do
+            if [ -n "${!key:-}" ]; then add_entry "key:$key" "ok" "configured"; else add_entry "key:$key" "hold" "not set"; fi
+          done
+          echo "  }" >> "$REPORT_FILE"
+          echo "}" >> "$REPORT_FILE"
+          echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
+          cat "$REPORT_FILE"
+
+      - name: 🚀 Run Facebook Story Pipeline
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          GDRIVE_STORY_VIDEO_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
+          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          OPENROUTER_API_KEY_AI: ${{ secrets.OPENROUTER_API_KEY_AI }}
+          GROQ_API_KEY_AI: ${{ secrets.GROQ_API_KEY_AI }}
+          GEMINI_API_KEY_AI: ${{ secrets.GEMINI_API_KEY_AI }}
+          MISTRAL_API_KEY_AI: ${{ secrets.MISTRAL_API_KEY_AI }}
+          CEREBRAS_API_KEY_AI: ${{ secrets.CEREBRAS_API_KEY_AI }}
+          COHERE_API_KEY_AI: ${{ secrets.COHERE_API_KEY_AI }}
+          HUGGINGFACE_API_KEY_AI: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          TAVILY_API_KEY_AI: ${{ secrets.TAVILY_API_KEY_AI }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          COVERR_API_KEY: ${{ secrets.COVERR_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social }}
+          FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
+          DEPS_DIR: ${{ env.DEPS_DIR }}
+          PIPER_DIR: ${{ env.DEPS_DIR }}/piper
+          TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
+        run: python3 "Social media/Facebook/Story_video.py"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fb-story-video-v7
+          path: Final_FB_Story.mp4
+          retention-days: 5
+          if-no-files-found: ignore
+
+      - name: 🧹 Cleanup Public Repo
+        if: always()
+        run: |
+          rm -rf "Social media"
+          rm -f Final_FB_Story.mp4
+
+      - name: 📊 Cache Status
+        if: always()
+        run: |
+          echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
