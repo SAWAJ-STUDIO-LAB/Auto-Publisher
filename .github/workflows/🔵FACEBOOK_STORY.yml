@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v6
+      CACHE_VERSION: v7
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -111,10 +111,11 @@ jobs:
 
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
-          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
+          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
             echo "⚡ Custom fonts CACHED"
           else
             echo "📥 Custom fonts download..."
+            rm -rf "$DEPS_DIR/fonts"
             mkdir -p "$DEPS_DIR/fonts"
 
             declare -A FONTS=(
@@ -124,6 +125,9 @@ jobs:
               ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
               ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
+              ["NotoEmoji-Regular.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf"
+              ["NotoEmoji-Bold.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Bold.ttf"
+              ["NotoColorEmoji.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf"
             )
 
             for name in "${!FONTS[@]}"; do
@@ -136,6 +140,9 @@ jobs:
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
+
+          echo "=== FONTS INSTALLED ==="
+          ls -la ~/.fonts/
 
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
@@ -245,8 +252,36 @@ jobs:
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
+          EMOJI_FONT="fail"
+          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
+            SZ=$(du -h "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" | cut -f1)
+            add_entry "noto-emoji-font" "ok" "$SZ"
+            EMOJI_FONT="ok"
+          else
+            add_entry "noto-emoji-font" "fail" "missing"
+          fi
+
+          if [ -f "$DEPS_DIR/fonts/NotoColorEmoji.ttf" ]; then
+            SZ=$(du -h "$DEPS_DIR/fonts/NotoColorEmoji.ttf" | cut -f1)
+            add_entry "noto-color-emoji" "ok" "$SZ"
+          else
+            add_entry "noto-color-emoji" "hold" "not present"
+          fi
+
+          if [ -f "$HOME/.fonts/NotoEmoji-Regular.ttf" ]; then
+            add_entry "emoji-in-home" "ok" "copied"
+          else
+            add_entry "emoji-in-home" "fail" "not copied"
+          fi
+
           SFC=$(fc-list 2>/dev/null | wc -l)
           add_entry "system-fonts" "ok" "$SFC fonts"
+
+          if fc-list 2>/dev/null | grep -qi "NotoEmoji"; then
+            add_entry "fc-emoji-visible" "ok" "fc-list sees emoji"
+          else
+            add_entry "fc-emoji-visible" "warn" "fc-list doesn't see emoji"
+          fi
 
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
             add_entry "python-venv" "ok" "installed"
