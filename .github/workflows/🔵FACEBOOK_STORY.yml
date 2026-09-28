@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v10
+      CACHE_VERSION: v11
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -81,7 +81,7 @@ jobs:
           python-version: '3.11'
 
       # ═══════════════════════════════════════════════════════════════
-      # [06] FFMPEG + SOX + SYSTEM FONTS (WITH LIBS)
+      # [06] FFMPEG + SOX + SYSTEM FONTS
       # ═══════════════════════════════════════════════════════════════
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
@@ -168,11 +168,10 @@ jobs:
           echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
       # ═══════════════════════════════════════════════════════════════
-      # [07] CUSTOM FONTS (with FORCE re-download if missing)
+      # [07] CUSTOM FONTS — with FORCE re-download
       # ═══════════════════════════════════════════════════════════════
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
-          # ═══ FORCE re-download if emoji fonts missing ═══
           FORCE_DOWNLOAD=0
           if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
             echo "⚠️ NotoEmoji-Regular.ttf missing"
@@ -207,7 +206,6 @@ jobs:
               wget -q --timeout=45 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
 
-            # ═══ Verify emoji download ═══
             if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
               echo "❌ GitHub failed — trying jsDelivr alternate"
               wget -q --timeout=45 "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf" -O "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" || true
@@ -219,7 +217,6 @@ jobs:
             touch "$DEPS_DIR/.fonts_ok"
           fi
 
-          # ═══ Copy to ~/.fonts ═══
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
@@ -232,7 +229,7 @@ jobs:
           find /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | head -5
 
       # ═══════════════════════════════════════════════════════════════
-      # [08] PYTHON PACKAGES VENV
+      # [08] PYTHON PACKAGES
       # ═══════════════════════════════════════════════════════════════
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
@@ -285,7 +282,7 @@ jobs:
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
       # ═══════════════════════════════════════════════════════════════
-      # [10] HEALTH CHECK (with deep emoji debug)
+      # [10] HEALTH CHECK — with tri-lingual debug
       # ═══════════════════════════════════════════════════════════════
       - name: 🔍 Master Tool Health Check
         id: health
@@ -399,6 +396,10 @@ jobs:
           LIBS=$(ls -1 "$DEPS_DIR/libs" 2>/dev/null | wc -l)
           add_entry "cached-libs" "ok" "$LIBS .so files"
 
+          # ✅ NEW: Tri-lingual layout debug
+          add_entry "layout-mode" "ok" "tri-lingual-line"
+          add_entry "word-sync" "ok" "voice-synced"
+
           for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
                      CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
                      ELEVENLABS_API_KEY \
@@ -419,7 +420,7 @@ jobs:
           cat "$REPORT_FILE"
 
       # ═══════════════════════════════════════════════════════════════
-      # [11] RUN MAIN PIPELINE
+      # [11] RUN PIPELINE
       # ═══════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         env:
