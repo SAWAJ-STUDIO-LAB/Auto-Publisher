@@ -71,7 +71,7 @@ jobs:
           LIB_DIR="$DEPS_DIR/libs"
 
           if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
-            echo "FFmpeg + SoX CACHED - restoring"
+            echo "FFmpeg + SoX CACHED"
             if [ -d "$LIB_DIR" ]; then
               sudo mkdir -p /usr/lib/x86_64-linux-gnu
               sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
@@ -98,7 +98,7 @@ jobs:
               sudo ldconfig
             fi
           else
-            echo "Fresh install of FFmpeg + SoX + espeak-ng"
+            echo "Fresh install"
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
             sudo ldconfig
@@ -124,20 +124,19 @@ jobs:
           touch "$MARKER"
           ffmpeg -version 2>&1 | head -1
           sox --version 2>&1 | head -1
-          echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
       - name: Custom Fonts Cache-Aware
         run: |
           FORCE_DOWNLOAD=0
           [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ] && FORCE_DOWNLOAD=1
-          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ] && FORCE_DOWNLOAD=1
           [ ! -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ] && FORCE_DOWNLOAD=1
           [ ! -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoSans-Bold.ttf" ] && FORCE_DOWNLOAD=1
 
-          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" 2>/dev/null || echo 0)
-            if [ "$SZ" -lt 100000 ]; then
-              echo "NotoEmoji-Regular.ttf too small - forcing re-download"
+          if [ -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ]; then
+            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" 2>/dev/null || echo 0)
+            if [ "$SZ" -lt 50000 ]; then
+              echo "NotoSansDevanagari-Bold.ttf too small - forcing re-download"
               FORCE_DOWNLOAD=1
             fi
           fi
@@ -169,7 +168,7 @@ jobs:
             echo "Downloaded files"
             ls -la "$DEPS_DIR/fonts/"
 
-            echo "FONT VERIFICATION"
+            echo "Font verification"
             for font in "$DEPS_DIR/fonts/"*.ttf; do
               if [ -f "$font" ]; then
                 MAGIC=$(xxd -p -l 4 "$font" 2>/dev/null | tr 'a-f' 'A-F')
@@ -177,7 +176,7 @@ jobs:
                 if [[ "$MAGIC" == "00010000" || "$MAGIC" == "74727565" || "$MAGIC" == "4F54544F" ]]; then
                   echo "VALID: $(basename $font) - $SZ bytes"
                 else
-                  echo "CORRUPT: $(basename $font) - $SZ bytes - deleting"
+                  echo "CORRUPT: $(basename $font) - $SZ bytes"
                   rm -f "$font"
                 fi
               fi
@@ -192,25 +191,6 @@ jobs:
 
           echo "~/.fonts contents"
           ls -la ~/.fonts/
-
-          echo "Fonts valid check"
-          if [ -f "$HOME/.fonts/NotoSansDevanagari-Bold.ttf" ]; then
-            echo "Hindi font OK"
-          else
-            echo "Hindi font MISSING"
-          fi
-
-          if [ -f "$HOME/.fonts/NotoNaskhArabic-Bold.ttf" ]; then
-            echo "Arabic font OK"
-          else
-            echo "Arabic font MISSING"
-          fi
-
-          if [ -f "$HOME/.fonts/NotoEmoji-Regular.ttf" ]; then
-            echo "Emoji font OK"
-          else
-            echo "Emoji font MISSING"
-          fi
 
       - name: Python Packages Cache-Aware
         run: |
@@ -356,4 +336,3 @@ jobs:
         run: |
           echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
-          ls -1 $DEPS_DIR/libs 2>/dev/null | wc -l
