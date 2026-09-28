@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v7
+      CACHE_VERSION: v8
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -47,7 +47,7 @@ jobs:
 
       - name: 📁 Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
 
       - name: 📥 Fetch Code from Private Repository
@@ -68,46 +68,88 @@ jobs:
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
+          LIB_DIR="$DEPS_DIR/libs"
 
-          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/ffprobe" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
-            echo "⚡ FFmpeg + SoX CACHED"
+          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
+            echo "⚡ Restoring FFmpeg + SoX from cache..."
+
+            if [ -d "$LIB_DIR" ]; then
+              sudo mkdir -p /usr/lib/x86_64-linux-gnu
+              sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+              sudo ldconfig
+            fi
 
             sudo mkdir -p /usr/local/bin
-            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
-            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
-            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox
-            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox
-
-            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
-              sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
-              sudo fc-cache -f > /dev/null 2>&1 || true
-            fi
+            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg 2>/dev/null || true
+            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null || true
+            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox 2>/dev/null || true
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox 2>/dev/null || true
 
             if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
               sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
-          else
-            echo "📥 FFmpeg + SoX + espeak-ng install..."
 
+            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
+              sudo mkdir -p /usr/share/fonts/truetype
+              sudo cp -rn "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
+              sudo fc-cache -f > /dev/null 2>&1 || true
+            fi
+
+            if ffmpeg -version >/dev/null 2>&1 && sox --version >/dev/null 2>&1; then
+              echo "✅ Cache restored and verified — FFmpeg + SoX working"
+            else
+              echo "⚠️ Cache binaries broken — reinstalling"
+              rm -f "$MARKER"
+              sudo apt-get update -q
+              sudo apt-get install -y -q --reinstall ffmpeg sox espeak-ng libsox-fmt-all \
+                fonts-noto fonts-noto-core fonts-noto-extra \
+                fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+              sudo ldconfig
+            fi
+
+          else
+            echo "📥 Fresh install of FFmpeg + SoX + espeak-ng..."
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
               fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
-
-            cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
-            cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe"
-            cp "$(which sox)" "$DEPS_DIR/bin/sox"
-            cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
-
-            mkdir -p "$DEPS_DIR/system-fonts/truetype"
-            cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
-
-            touch "$MARKER"
+            sudo ldconfig
           fi
 
-          ffmpeg -version | head -1
-          sox --version
+          mkdir -p "$DEPS_DIR/bin" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
+
+          cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg" 2>/dev/null || true
+          cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null || true
+          cp "$(which sox)" "$DEPS_DIR/bin/sox" 2>/dev/null || true
+          cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" 2>/dev/null || true
+
+          for bin in ffmpeg ffprobe sox; do
+            LDD=$(ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}')
+            for lib in $LDD; do
+              if [ -f "$lib" ]; then
+                cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
+              fi
+            done
+          done
+
+          for libglob in /usr/lib/x86_64-linux-gnu/libav*.so* \
+                         /usr/lib/x86_64-linux-gnu/libsw*.so* \
+                         /usr/lib/x86_64-linux-gnu/libpostproc*.so* \
+                         /usr/lib/x86_64-linux-gnu/libsox*.so*; do
+            if [ -f "$libglob" ]; then
+              cp -n "$libglob" "$LIB_DIR/" 2>/dev/null || true
+            fi
+          done
+
+          cp -rn /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
+
+          touch "$MARKER"
+
+          echo "=== FINAL VERIFY ==="
+          ffmpeg -version 2>&1 | head -1
+          sox --version 2>&1 | head -1
+          echo "Libraries cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
@@ -125,9 +167,9 @@ jobs:
               ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
               ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
-              ["NotoEmoji-Regular.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf"
-              ["NotoEmoji-Bold.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Bold.ttf"
-              ["NotoColorEmoji.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf"
+              ["NotoEmoji-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf"
+              ["NotoEmoji-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Bold.ttf"
+              ["NotoColorEmoji.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf"
             )
 
             for name in "${!FONTS[@]}"; do
@@ -252,11 +294,9 @@ jobs:
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
-          EMOJI_FONT="fail"
           if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
             SZ=$(du -h "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" | cut -f1)
             add_entry "noto-emoji-font" "ok" "$SZ"
-            EMOJI_FONT="ok"
           else
             add_entry "noto-emoji-font" "fail" "missing"
           fi
@@ -286,6 +326,9 @@ jobs:
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
             add_entry "python-venv" "ok" "installed"
           else add_entry "python-venv" "fail" "missing"; fi
+
+          LIBS=$(ls -1 "$DEPS_DIR/libs" 2>/dev/null | wc -l)
+          add_entry "cached-libs" "ok" "$LIBS .so files"
 
           for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
                      CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
@@ -366,3 +409,4 @@ jobs:
         run: |
           echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
+          ls -1 $DEPS_DIR/libs 2>/dev/null | wc -l
