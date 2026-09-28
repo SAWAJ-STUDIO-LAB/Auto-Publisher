@@ -16,7 +16,7 @@
 # ───────────────────────────────────────────────────────────────────────────
 # [SECTION 1] WORKFLOW NAME & TRIGGERS
 # ───────────────────────────────────────────────────────────────────────────
-name: "🔵FACEBOOK STORY (Public Runner)"
+name: "🔵FACEBOOK STORY"
 
 on:
   # Manual trigger — GitHub Actions UI se "Run workflow" button
