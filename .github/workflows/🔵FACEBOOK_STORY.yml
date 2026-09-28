@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v9
+      CACHE_VERSION: v10
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -168,14 +168,25 @@ jobs:
           echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
       # ═══════════════════════════════════════════════════════════════
-      # [07] CUSTOM FONTS (9 FONTS INCLUDING EMOJI)
+      # [07] CUSTOM FONTS (with FORCE re-download if missing)
       # ═══════════════════════════════════════════════════════════════
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
-          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
-            echo "⚡ Custom fonts CACHED"
+          # ═══ FORCE re-download if emoji fonts missing ═══
+          FORCE_DOWNLOAD=0
+          if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
+            echo "⚠️ NotoEmoji-Regular.ttf missing"
+            FORCE_DOWNLOAD=1
+          fi
+          if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ]; then
+            echo "⚠️ NotoEmoji-Bold.ttf missing"
+            FORCE_DOWNLOAD=1
+          fi
+
+          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
+            echo "⚡ Custom fonts CACHED — all present"
           else
-            echo "📥 Custom fonts download..."
+            echo "📥 Downloading fonts (force=$FORCE_DOWNLOAD)..."
             rm -rf "$DEPS_DIR/fonts"
             mkdir -p "$DEPS_DIR/fonts"
 
@@ -186,24 +197,39 @@ jobs:
               ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
               ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
-              ["NotoEmoji-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf"
-              ["NotoEmoji-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Bold.ttf"
-              ["NotoColorEmoji.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf"
+              ["NotoEmoji-Regular.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf"
+              ["NotoEmoji-Bold.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Bold.ttf"
+              ["NotoColorEmoji.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf"
             )
 
             for name in "${!FONTS[@]}"; do
-              wget -q --timeout=30 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
+              echo "  ↓ $name"
+              wget -q --timeout=45 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
+
+            # ═══ Verify emoji download ═══
+            if [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
+              echo "❌ GitHub failed — trying jsDelivr alternate"
+              wget -q --timeout=45 "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf" -O "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" || true
+            fi
+
+            echo "=== Downloaded files ==="
+            ls -la "$DEPS_DIR/fonts/"
 
             touch "$DEPS_DIR/.fonts_ok"
           fi
 
+          # ═══ Copy to ~/.fonts ═══
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-          echo "=== FONTS INSTALLED ==="
+          echo "=== ~/.fonts contents ==="
           ls -la ~/.fonts/
+
+          echo "=== Emoji fonts found ==="
+          find ~/.fonts -name "*Emoji*.ttf" 2>/dev/null
+          find /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | head -5
 
       # ═══════════════════════════════════════════════════════════════
       # [08] PYTHON PACKAGES VENV
@@ -259,7 +285,7 @@ jobs:
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
       # ═══════════════════════════════════════════════════════════════
-      # [10] HEALTH CHECK
+      # [10] HEALTH CHECK (with deep emoji debug)
       # ═══════════════════════════════════════════════════════════════
       - name: 🔍 Master Tool Health Check
         id: health
@@ -349,6 +375,21 @@ jobs:
             add_entry "fc-emoji-visible" "ok" "fc-list sees emoji"
           else
             add_entry "fc-emoji-visible" "warn" "fc-list doesn't see emoji"
+          fi
+
+          # ═══ DEEP EMOJI DEBUG ═══
+          EMOJI_USER=$(find ~/.fonts -name "*Emoji*.ttf" 2>/dev/null | wc -l)
+          EMOJI_SYS=$(find /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | wc -l)
+          EMOJI_DEPS=$(find "$DEPS_DIR/fonts" -name "*Emoji*.ttf" 2>/dev/null | wc -l)
+          add_entry "emoji-usr" "ok" "$EMOJI_USER files"
+          add_entry "emoji-sys" "ok" "$EMOJI_SYS files"
+          add_entry "emoji-deps" "ok" "$EMOJI_DEPS files"
+
+          EMOJI_PATHS=$(find ~/.fonts "$DEPS_DIR/fonts" /usr/share/fonts -name "*Emoji*.ttf" 2>/dev/null | head -3 | tr '\n' '|')
+          if [ -n "$EMOJI_PATHS" ]; then
+            add_entry "emoji-paths" "ok" "$EMOJI_PATHS"
+          else
+            add_entry "emoji-paths" "fail" "no emoji fonts found"
           fi
 
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
