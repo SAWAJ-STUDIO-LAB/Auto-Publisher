@@ -1,4 +1,4 @@
-name: "🔵FACEBOOK STORY (Public Runner)"
+name: "🔵 FACEBOOK STORY (Public Runner)"
 
 on:
   workflow_dispatch:
@@ -12,78 +12,171 @@ on:
     - cron: '30 23 * * *'   # 5:00 AM IST
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
+# ─────────────────────────────────────────────
+# GLOBAL ENV — Saare caches ek hi "Toolbox" me
+# ─────────────────────────────────────────────
+env:
+  PYTHON_VERSION: '3.11'
+  CACHE_VERSION: 'v1'                    # jab deps change karo to isko v2 karo
+  TOOLBOX: ${{ github.workspace }}/.toolbox
+  PIP_CACHE_DIR: ${{ github.workspace }}/.toolbox/pip
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_NO_INPUT: '1'
+  XDG_CACHE_HOME: ${{ github.workspace }}/.toolbox/xdg
+  HF_HOME: ${{ github.workspace }}/.toolbox/hf
+  PRIVATE_REPO: 'SAWAJ-STUDIO-LAB/admin'
+
 jobs:
   fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    env:
+      # ✅ FIX: Schedule pe AUTO true, manual pe user ka choice
+      UPLOAD_TO_SOCIAL: ${{ github.event_name == 'schedule' && 'true' || inputs.upload_to_social }}
+
     steps:
-      - name: Checkout Public Repository
+      # ── 1. Checkout ─────────────────────────────
+      - name: 📦 Checkout Public Repository
         uses: actions/checkout@v4
 
+      # ── 2. Pre-flight: secrets validate ─────────
+      - name: 🔐 Pre-flight — Validate Required Secrets
+        env:
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+        run: |
+          missing=()
+          for s in TOKEN_GITHUB TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID FACEBOOK_INSTAGRAM_META_TOKEN FACEBOOK_PAGE_ID; do
+            [ -z "${!s}" ] && missing+=("$s")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]}"
+            exit 1
+          fi
+          echo "✅ All critical secrets present"
+
+      # ── 3. TOOLBOX RESTORE (ek hi cache!) ───────
+      - name: 🗂️ Restore Toolbox (all caches)
+        id: toolbox-cache
+        uses: actions/cache@v4
+        with:
+          path: .toolbox
+          key: toolbox-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ env.CACHE_VERSION }}
+          restore-keys: |
+            toolbox-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            toolbox-${{ runner.os }}-
+
+      - name: 📊 Cache Status Report
+        run: |
+          if [ "${{ steps.toolbox-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "🚀 Toolbox cache HIT — fast path!"
+          else
+            echo "🛠️ Toolbox cache MISS — first-time setup (thoda time lagega)"
+          fi
+
+      # ── 4. Python ───────────────────────────────
+      - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # ── 5. System bootstrap: ffmpeg + fonts ─────
+      - name: 🧰 Bootstrap System Tools (ffmpeg + fonts)
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOOLBOX/bin" "$TOOLBOX/fonts" "$TOOLBOX/fontcache"
+
+          # ---------- FFmpeg (static, cached) ----------
+          if [ -x "$TOOLBOX/bin/ffmpeg" ]; then
+            echo "✅ ffmpeg mila toolbox se"
+          else
+            echo "⬇️ Static ffmpeg download kar rahe hain (one-time)..."
+            mkdir -p "$TOOLBOX/tmp"
+            if curl -fsSL --retry 3 --connect-timeout 20 \
+                "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" \
+                -o "$TOOLBOX/tmp/ffmpeg.tar.xz"; then
+              tar -xJf "$TOOLBOX/tmp/ffmpeg.tar.xz" -C "$TOOLBOX/tmp"
+              find "$TOOLBOX/tmp" -name 'ffmpeg'  -type f -exec mv {} "$TOOLBOX/bin/ffmpeg"  \;
+              find "$TOOLBOX/tmp" -name 'ffprobe' -type f -exec mv {} "$TOOLBOX/bin/ffprobe" \;
+              chmod +x "$TOOLBOX/bin/"* || true
+              rm -rf "$TOOLBOX/tmp"
+              echo "✅ ffmpeg ready"
+            else
+              echo "⚠️ Static download fail — apt fallback use kar rahe hain"
+              sudo apt-get update -q
+              sudo apt-get install -y -q ffmpeg
+            fi
+          fi
+          echo "$TOOLBOX/bin" >> "$GITHUB_PATH"
+
+          # ---------- Fonts (cached) ----------
+          fetch_font() {
+            local url="$1" dest="$2"
+            [ -s "$dest" ] && return 0
+            curl -fsSL --retry 3 --connect-timeout 15 "$url" -o "$dest" || rm -f "$dest"
+          }
+
+          BASE="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf"
+          fetch_font "$BASE/NotoSans/NotoSans-Regular.ttf"                              "$TOOLBOX/fonts/NotoSans-Regular.ttf"
+          fetch_font "$BASE/NotoSans/NotoSans-Bold.ttf"                                 "$TOOLBOX/fonts/NotoSans-Bold.ttf"
+          fetch_font "$BASE/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"          "$TOOLBOX/fonts/NotoSansDevanagari-Regular.ttf"
+          fetch_font "$BASE/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"             "$TOOLBOX/fonts/NotoSansDevanagari-Bold.ttf"
+          fetch_font "$BASE/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"                "$TOOLBOX/fonts/NotoNaskhArabic-Regular.ttf"
+          fetch_font "$BASE/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"                   "$TOOLBOX/fonts/NotoNaskhArabic-Bold.ttf"
+
+          # ---------- Fontconfig → sirf toolbox use karo ----------
+          cat > "$TOOLBOX/fonts.conf" <<EOF
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir>$TOOLBOX/fonts</dir>
+            <cachedir>$TOOLBOX/fontcache</cachedir>
+          </fontconfig>
+          EOF
+
+          echo "FONTCONFIG_FILE=$TOOLBOX/fonts.conf" >> "$GITHUB_ENV"
+          export FONTCONFIG_FILE="$TOOLBOX/fonts.conf"
+          fc-cache -f > /dev/null 2>&1 || true
+          echo "✅ Fonts ready — $(ls -1 "$TOOLBOX/fonts" | wc -l) files"
+
+      # ── 6. Python deps (cached pip) ─────────────
+      - name: 🐍 Install Python Dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --prefer-binary --cache-dir "$PIP_CACHE_DIR" \
+            requests edge-tts mutagen Pillow \
+            google-api-python-client google-auth-httplib2 google-auth-oauthlib \
+            tenacity
+
+      # ── 7. Private repo secure clone ────────────
       - name: 📥 Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
-          PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
-          
-          echo "Private repository se script laa rahe hain..."
-          git clone https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
-          
+          set -euo pipefail
+          # ✅ Secure: token URL me nahi, header me
+          git config --global http.extraheader "AUTHORIZATION: bearer ${TOKEN_GITHUB}"
+          git clone --depth 1 "https://github.com/${PRIVATE_REPO}.git" temp_private_repo
+          git config --global --unset-all http.extraheader || true
+
           mkdir -p "Social media/Facebook"
-          cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
-          
+          cp "temp_private_repo/Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
           rm -rf temp_private_repo
+          echo "✅ Script fetched securely"
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: 🗂️ Setup 'Toll' (Cache) for Python Pip Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-fb-story-tools-v3
-          restore-keys: |
-            ${{ runner.os }}-pip-fb-story-tools-
-
-      - name: 🗂️ Setup 'Toll' Folder for Fonts
-        id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-custom-fonts-fb-story-v3
-
-      - name: Install System Setup (FFmpeg)
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
-
-      - name: Download Custom Fonts (Agar Toll me nahi hain)
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf" -O ~/.fonts/NotoSans-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O ~/.fonts/NotoSansDevanagari-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
-
-      - name: Refresh Fonts & Auto-Upgrade Python Tools (Toll Usage)
-        run: |
-          fc-cache -f -v
-          # Yeh Toll folder se packages uthayega aur naye version ko automatic upgrade karega
-          pip install --upgrade requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
-
+      # ── 8. Pipeline run ─────────────────────────
       - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -109,22 +202,42 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
         run: python3 "Social media/Facebook/Story_video.py"
 
-      - name: Upload Artifact
+      # ── 9. Artifact ─────────────────────────────
+      - name: 📤 Upload Video Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fb-story-video
+          name: fb-story-video-${{ github.run_number }}
           path: Final_FB_Story.mp4
           retention-days: 5
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
-      - name: 🧹 Clean Up Public Repository (Security)
+      # ── 10. Job summary ─────────────────────────
+      - name: 📊 Job Summary
         if: always()
         run: |
-          echo "Public repo se private files delete kar rahe hain..."
-          rm -rf "Social media"
-          rm -f Final_FB_Story.mp4
-          echo "✅ Repository ekdam clean ho gayi hai!"
+          {
+            echo "## 🔵 Facebook Story Pipeline"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Status | \`${{ job.status }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Upload to Social | \`${{ env.UPLOAD_TO_SOCIAL }}\` |"
+            echo "| Toolbox cache hit | \`${{ steps.toolbox-cache.outputs.cache-hit }}\` |"
+            if [ -f Final_FB_Story.mp4 ]; then
+              echo "| Video size | $(du -h Final_FB_Story.mp4 | cut -f1) |"
+            else
+              echo "| Video | ❌ not produced |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 11. Cleanup ─────────────────────────────
+      - name: 🧹 Cleanup Workspace
+        if: always()
+        run: |
+          rm -rf "Social media" temp_private_repo || true
+          rm -f Final_FB_Story.mp4 || true
+          echo "✅ Workspace clean"
