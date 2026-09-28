@@ -32,45 +32,35 @@ jobs:
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
-          # Yahan apni private repo ka naam daalein
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
           
           echo "Private repository se script laa rahe hain..."
           git clone https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git temp_private_repo
           
-          # Folder structure banakar sirf zaroori .py file copy kar rahe hain
           mkdir -p "Social media/Facebook"
           cp temp_private_repo/"Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
           
-          # Clone kiye gaye baaki saare data ko turant delete kar do
           rm -rf temp_private_repo
 
-      - name: Setup Python
+      - name: Setup Python & 'Toll' (Cache) for Tools
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip' # Yeh automatic pip tools ka 'Toll' folder banayega aur manage karega
 
-      - name: Cache Python Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-fb-story-v2
-          restore-keys: |
-            ${{ runner.os }}-pip-fb-story-
-
-      - name: Cache Custom Fonts
+      - name: 🗂️ Setup 'Toll' Folder for Fonts
         id: cache-fonts
         uses: actions/cache@v4
         with:
           path: ~/.fonts
-          key: ${{ runner.os }}-custom-fonts-fb-story-v2
+          key: ${{ runner.os }}-custom-fonts-fb-story-v3
 
       - name: Install System Setup (FFmpeg)
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
 
-      - name: Download Custom Fonts (only if cache miss)
+      - name: Download Custom Fonts (Agar Toll me nahi hain)
         if: steps.cache-fonts.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.fonts
@@ -81,10 +71,11 @@ jobs:
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
 
-      - name: Install Python Packages & Refresh Fonts
+      - name: Refresh Fonts & Auto-Upgrade Python Tools
         run: |
           fc-cache -f -v
-          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+          # --upgrade lagane se purane tools cache se aayenge aur naye versions automatically update ho jayenge
+          pip install --upgrade requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
       - name: 🚀 Run Facebook Story Pipeline
         env:
