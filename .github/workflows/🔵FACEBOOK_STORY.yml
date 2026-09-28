@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v13
+      CACHE_VERSION: v15
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -131,6 +131,8 @@ jobs:
           FORCE_DOWNLOAD=0
           [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ] && FORCE_DOWNLOAD=1
           [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" ] && FORCE_DOWNLOAD=1
 
           if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
             SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" 2>/dev/null || echo 0)
@@ -148,12 +150,12 @@ jobs:
             mkdir -p "$DEPS_DIR/fonts"
 
             declare -A FONTS=(
-              ["NotoSans-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
-              ["NotoSans-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
-              ["NotoSansDevanagari-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"
-              ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
-              ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
-              ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
+              ["NotoSans-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
+              ["NotoSans-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
+              ["NotoSansDevanagari-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"
+              ["NotoSansDevanagari-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
+              ["NotoNaskhArabic-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
+              ["NotoNaskhArabic-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
               ["NotoEmoji-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf"
               ["NotoEmoji-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Bold.ttf"
               ["NotoColorEmoji.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf"
@@ -161,21 +163,22 @@ jobs:
 
             for name in "${!FONTS[@]}"; do
               echo "Downloading $name"
-              wget -q --timeout=45 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
+              wget -q --timeout=60 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
 
             echo "Downloaded files"
             ls -la "$DEPS_DIR/fonts/"
 
-            for f in NotoEmoji-Regular.ttf NotoEmoji-Bold.ttf NotoSans-Bold.ttf; do
-              if [ -f "$DEPS_DIR/fonts/$f" ]; then
-                SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
-                echo "$f $SZ bytes"
-                if [ "$SZ" -lt 50000 ]; then
-                  echo "Too small - alternate download"
-                  if [ "$f" = "NotoEmoji-Regular.ttf" ]; then
-                    wget -q --timeout=60 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoEmoji-Regular.ttf" -O "$DEPS_DIR/fonts/$f" || true
-                  fi
+            echo "FONT VERIFICATION"
+            for font in "$DEPS_DIR/fonts/"*.ttf; do
+              if [ -f "$font" ]; then
+                MAGIC=$(xxd -p -l 4 "$font" 2>/dev/null | tr 'a-f' 'A-F')
+                SZ=$(stat -c%s "$font")
+                if [[ "$MAGIC" == "00010000" || "$MAGIC" == "74727565" || "$MAGIC" == "4F54544F" ]]; then
+                  echo "VALID: $(basename $font) - $SZ bytes"
+                else
+                  echo "CORRUPT: $(basename $font) - $SZ bytes - deleting"
+                  rm -f "$font"
                 fi
               fi
             done
@@ -190,22 +193,23 @@ jobs:
           echo "~/.fonts contents"
           ls -la ~/.fonts/
 
-          echo "Emoji fonts found"
-          find ~/.fonts -name "*Emoji*.ttf" 2>/dev/null || true
-
-          echo "FONT VALIDITY TEST"
-          if [ -f "$HOME/.fonts/NotoEmoji-Regular.ttf" ]; then
-            SZ=$(stat -c%s "$HOME/.fonts/NotoEmoji-Regular.ttf")
-            echo "NotoEmoji-Regular.ttf found in HOME size $SZ"
+          echo "Fonts valid check"
+          if [ -f "$HOME/.fonts/NotoSansDevanagari-Bold.ttf" ]; then
+            echo "Hindi font OK"
           else
-            echo "NotoEmoji-Regular.ttf not in HOME"
+            echo "Hindi font MISSING"
           fi
 
-          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf")
-            echo "NotoEmoji-Regular.ttf found in DEPS size $SZ"
+          if [ -f "$HOME/.fonts/NotoNaskhArabic-Bold.ttf" ]; then
+            echo "Arabic font OK"
           else
-            echo "NotoEmoji-Regular.ttf not in DEPS"
+            echo "Arabic font MISSING"
+          fi
+
+          if [ -f "$HOME/.fonts/NotoEmoji-Regular.ttf" ]; then
+            echo "Emoji font OK"
+          else
+            echo "Emoji font MISSING"
           fi
 
       - name: Python Packages Cache-Aware
@@ -268,13 +272,13 @@ jobs:
           command -v gtts-cli >/dev/null 2>&1 && add_entry "gtts" "ok" "present" || add_entry "gtts" "fail" "not found"
           command -v piper >/dev/null 2>&1 && add_entry "piper-cli" "ok" "present" || add_entry "piper-cli" "fail" "not found"
 
-          [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ] && add_entry "piper-model-pratham" "ok" "present" || add_entry "piper-model-pratham" "fail" "missing"
-          [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ] && add_entry "piper-model-priyamvada" "ok" "present" || add_entry "piper-model-priyamvada" "fail" "missing"
+          [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ] && add_entry "piper-pratham" "ok" "present" || add_entry "piper-pratham" "fail" "missing"
+          [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ] && add_entry "piper-priyamvada" "ok" "present" || add_entry "piper-priyamvada" "fail" "missing"
 
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
-          for f in NotoEmoji-Regular.ttf NotoEmoji-Bold.ttf NotoColorEmoji.ttf; do
+          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf; do
             if [ -f "$DEPS_DIR/fonts/$f" ]; then
               SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
               add_entry "font-$f" "ok" "$SZ bytes"
