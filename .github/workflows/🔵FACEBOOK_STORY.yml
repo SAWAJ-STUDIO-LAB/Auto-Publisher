@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v17
+      CACHE_VERSION: v18
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -235,13 +235,69 @@ jobs:
             exit 1
           fi
 
-          mkdir -p ~/.fonts
-          cp -f "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
-          fc-cache -fv ~/.fonts/ > /dev/null 2>&1 || true
+          # ═══════════════════════════════════════════════════════════════
+          # ✅ DEEP VERIFY: fontconfig से Hindi/Arabic match
+          # ═══════════════════════════════════════════════════════════════
+          echo "═══ FONTCONFIG DEEP VERIFY ═══"
 
-          echo "--- fontconfig match test ---"
-          fc-match "Noto Sans Devanagari:bold" 2>/dev/null || echo "Devanagari not matched"
-          fc-match "Noto Naskh Arabic:bold" 2>/dev/null || echo "Arabic not matched"
+          DEVA_MATCH=$(fc-match "Noto Sans Devanagari:bold" 2>/dev/null | grep -i "devanagari" || true)
+          ARAB_MATCH=$(fc-match "Noto Naskh Arabic:bold" 2>/dev/null | grep -i "arabic" || true)
+
+          if [ -z "$DEVA_MATCH" ]; then
+            echo "⚠️ Devanagari not matched — forcing system copy"
+            sudo cp -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
+            sudo cp -f "$DEPS_DIR/fonts/NotoSansDevanagari-Regular.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
+            sudo fc-cache -f > /dev/null 2>&1 || true
+          else
+            echo "✓ Devanagari matched: $DEVA_MATCH"
+          fi
+
+          if [ -z "$ARAB_MATCH" ]; then
+            echo "⚠️ Arabic not matched — forcing system copy"
+            sudo cp -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
+            sudo cp -f "$DEPS_DIR/fonts/NotoNaskhArabic-Regular.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
+            sudo fc-cache -f > /dev/null 2>&1 || true
+          else
+            echo "✓ Arabic matched: $ARAB_MATCH"
+          fi
+
+          # ═══════════════════════════════════════════════════════════════
+          # ✅ PIL GLYPH TEST
+          # ═══════════════════════════════════════════════════════════════
+          echo "═══ PIL GLYPH TEST ═══"
+          python3 -c "
+from PIL import ImageFont
+import os
+
+tests = [
+    ('NotoSansDevanagari-Bold.ttf', 'क', '$DEPS_DIR/fonts'),
+    ('NotoNaskhArabic-Bold.ttf', 'ب', '$DEPS_DIR/fonts'),
+    ('NotoSans-Bold.ttf', 'A', '$DEPS_DIR/fonts'),
+]
+
+ok_count = 0
+for fname, char, fdir in tests:
+    p = os.path.join(fdir, fname)
+    if not os.path.exists(p):
+        print(f'❌ {fname}: FILE MISSING')
+        continue
+    try:
+        font = ImageFont.truetype(p, 48)
+        bbox = font.getbbox(char)
+        if bbox and bbox[2] > bbox[0]:
+            print(f'✅ {fname}: \"{char}\" width={bbox[2]-bbox[0]}')
+            ok_count += 1
+        else:
+            print(f'❌ {fname}: \"{char}\" EMPTY GLYPH')
+    except Exception as e:
+        print(f'❌ {fname}: {e}')
+
+if ok_count < 3:
+    print('WARNING: Some fonts failed glyph test')
+else:
+    print('ALL GLYPHS VERIFIED')
+"
+
           echo "═══ ALL FONTS VERIFIED ═══"
 
       - name: Python Packages Cache-Aware
