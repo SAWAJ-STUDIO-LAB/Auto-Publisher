@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v21
+      CACHE_VERSION: v22
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -59,39 +59,33 @@ jobs:
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           LIB_DIR="$DEPS_DIR/libs"
-
           if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
-            echo "FFmpeg + SoX CACHED"
+            echo "CACHED"
             if [ -d "$LIB_DIR" ]; then
               sudo mkdir -p /usr/lib/x86_64-linux-gnu
               sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
               sudo ldconfig
             fi
-            sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg 2>/dev/null || true
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null || true
             sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox 2>/dev/null || true
             sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox 2>/dev/null || true
             [ -f "$DEPS_DIR/bin/espeak-ng" ] && sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng && sudo chmod +x /usr/local/bin/espeak-ng || true
             if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
-              sudo mkdir -p /usr/share/fonts/truetype
               sudo cp -rn "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
               sudo fc-cache -f > /dev/null 2>&1 || true
             fi
             if ! (ffmpeg -version >/dev/null 2>&1 && sox --version >/dev/null 2>&1); then
-              echo "Cache broken - reinstalling"
               rm -f "$MARKER"
               sudo apt-get update -q
               sudo apt-get install -y -q --reinstall ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
               sudo ldconfig
             fi
           else
-            echo "Fresh install"
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
             sudo ldconfig
           fi
-
           mkdir -p "$DEPS_DIR/bin" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
           cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg" 2>/dev/null || true
           cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null || true
@@ -99,23 +93,27 @@ jobs:
           cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" 2>/dev/null || true
           for bin in ffmpeg ffprobe sox; do
             LDD=$(ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}')
-            for lib in $LDD; do
-              [ -f "$lib" ] && cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
-            done
+            for lib in $LDD; do [ -f "$lib" ] && cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true; done
           done
           cp -rn /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
           touch "$MARKER"
 
-      - name: Download Custom Fonts
+      - name: Download Custom Fonts (Auto-Heal)
         run: |
-          FORCE_DOWNLOAD=0
-          [ ! -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ] && FORCE_DOWNLOAD=1
-          [ ! -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          # ✅ हर run पर font integrity check
+          NEED_DOWNLOAD=0
+          for f in NotoSans-Regular.ttf NotoSans-Bold.ttf \
+                   NotoSansDevanagari-Regular.ttf NotoSansDevanagari-Bold.ttf \
+                   NotoNaskhArabic-Regular.ttf NotoNaskhArabic-Bold.ttf; do
+            P="$DEPS_DIR/fonts/$f"
+            if [ ! -f "$P" ] || [ "$(stat -c%s "$P" 2>/dev/null || echo 0)" -lt 50000 ]; then
+              echo "MISSING/BAD: $f"
+              NEED_DOWNLOAD=1
+            fi
+          done
 
-          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
-            echo "Custom fonts CACHED"
-          else
-            echo "Downloading fonts"
+          if [ $NEED_DOWNLOAD -eq 1 ]; then
+            echo "Re-downloading all fonts"
             rm -rf "$DEPS_DIR/fonts"
             mkdir -p "$DEPS_DIR/fonts"
             declare -A FONTS=(
@@ -127,26 +125,38 @@ jobs:
               ["NotoNaskhArabic-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
             )
             for name in "${!FONTS[@]}"; do
-              wget -q --timeout=60 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
+              for try in 1 2 3; do
+                wget -q --timeout=60 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" && break
+                sleep 2
+              done
             done
-            touch "$DEPS_DIR/.fonts_ok"
+          else
+            echo "Fonts CACHED and OK"
+          fi
+
+          # ✅ Hard verify — कोई भी missing तो रुको
+          MISSING=0
+          for f in NotoSans-Regular.ttf NotoSans-Bold.ttf \
+                   NotoSansDevanagari-Regular.ttf NotoSansDevanagari-Bold.ttf \
+                   NotoNaskhArabic-Regular.ttf NotoNaskhArabic-Bold.ttf; do
+            P="$DEPS_DIR/fonts/$f"
+            SZ=$(stat -c%s "$P" 2>/dev/null || echo 0)
+            if [ "$SZ" -gt 50000 ]; then
+              echo "OK: $f ($SZ bytes)"
+            else
+              echo "FAIL: $f"
+              MISSING=$((MISSING+1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "CRITICAL: $MISSING fonts missing"
+            exit 1
           fi
 
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
-          fc-cache -f > /dev/null 2>&1 || true
-
-          MISSING=0
-          for f in NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSansDevanagari-Regular.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Regular.ttf NotoNaskhArabic-Bold.ttf; do
-            if [ -f "$DEPS_DIR/fonts/$f" ] && [ "$(stat -c%s "$DEPS_DIR/fonts/$f")" -gt 50000 ]; then
-              echo "OK: $f"
-            else
-              echo "MISSING: $f"
-              MISSING=$((MISSING+1))
-            fi
-          done
-          [ $MISSING -gt 0 ] && exit 1
-          echo "ALL FONTS VERIFIED"
+          fc-cache -fv ~/.fonts/ > /dev/null 2>&1 || true
+          echo "FONTS READY"
 
       - name: Python Packages Cache-Aware
         run: |
@@ -217,7 +227,7 @@ jobs:
 
           session = requests.Session()
           session.mount("https://", HTTPAdapter(max_retries=Retry(
-              total=5, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])))
+              total=5, backoff_factor=1.5, status_forcelist=[429,500,502,503,504])))
 
           TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
           TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -227,16 +237,11 @@ jobs:
           PIPER_DIR = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
           event_name = os.environ.get("GITHUB_EVENT_NAME", "")
           should_post_social = (event_name == "schedule") or \
-                               (str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true")
+                               (str(os.environ.get("UPLOAD_TO_SOCIAL","")).lower() == "true")
           RUN_START = time.time()
           FPS, INTRO_SEC, OUTRO_SEC, W, H = 25, 3.5, 5.0, 1080, 1920
-          VOICE_MIN, VOICE_MAX = 31.8, 58.8
-          VIDEO_MIN_HARD = 35.0
+          VOICE_MIN, VOICE_MAX = 30.0, 60.0
           TEXT_Y_POSITION = 0.75
-
-          # ✅ SYNC CONSTANTS — यहाँ tune कर सकते हो
-          MIN_WORD_DUR = 0.50   # हर word कम से कम 0.5s दिखे
-          MAX_WORD_DUR = 1.10   # हर word ज़्यादा से ज़्यादा 1.1s दिखे
 
           BRAND_NAME = "SAWAJ STUDIO"
           BRAND_HANDLE = "@SawajStudio"
@@ -244,37 +249,32 @@ jobs:
           AMEEN_ARABIC = "آمین ثم آمین"
 
           BOOKS = [
-              {"eng": "eng-bukhari",  "ara": "ara-bukhari",  "name": "सहीह अल-बुख़ारी",    "max": 7563},
-              {"eng": "eng-muslim",   "ara": "ara-muslim",   "name": "सहीह मुस्लिम",       "max": 3032},
-              {"eng": "eng-abudawud", "ara": "ara-abudawud", "name": "सुनन अबू दाऊद",      "max": 5274},
-              {"eng": "eng-tirmidhi", "ara": "ara-tirmidhi", "name": "जामी अत-तिर्मिज़ी",  "max": 3956},
-              {"eng": "eng-nasai",    "ara": "ara-nasai",    "name": "सुनन अन-नसाई",       "max": 5758},
+              {"eng":"eng-bukhari", "ara":"ara-bukhari", "name":"सहीह अल-बुख़ारी", "max":7563},
+              {"eng":"eng-muslim",  "ara":"ara-muslim",  "name":"सहीह मुस्लिम",    "max":3032},
+              {"eng":"eng-abudawud","ara":"ara-abudawud","name":"सुनन अबू दाऊद",   "max":5274},
+              {"eng":"eng-tirmidhi","ara":"ara-tirmidhi","name":"जामी अत-तिर्मिज़ी","max":3956},
+              {"eng":"eng-nasai",   "ara":"ara-nasai",   "name":"सुनन अन-नसाई",    "max":5758},
           ]
 
-          FB_PALETTE = {"name": "Royal Gold", "primary": [212,175,55], "secondary": [255,220,120],
-                        "text": [255,245,220], "accent": [255,200,80], "glow": [255,220,120]}
+          FB_PALETTE = {"name":"Royal Gold","primary":[212,175,55],"secondary":[255,220,120],
+                        "text":[255,245,220],"accent":[255,200,80],"glow":[255,220,120]}
 
-          COLOR_POOL = [
-              (170,100,255),(255,220,60),(255,150,50),(80,180,255),(100,220,100),
-              (255,100,100),(255,150,200),(200,150,100),(240,240,240),(100,220,200),
-              (200,140,240),(255,200,100),(150,200,100),(255,180,80),(140,180,220),
-              (220,150,180),
-          ]
+          COLOR_POOL = [(170,100,255),(255,220,60),(255,150,50),(80,180,255),(100,220,100),
+                        (255,100,100),(255,150,200),(200,150,100),(240,240,240),(100,220,200),
+                        (200,140,240),(255,200,100),(150,200,100),(255,180,80),(140,180,220),
+                        (220,150,180)]
 
           def _hash(s):
               h = 0
               for c in str(s): h = (h * 31 + ord(c)) & 0xFFFFFFFF
               return h
 
-          def color_for_word(w):
-              return COLOR_POOL[_hash(w) % len(COLOR_POOL)]
+          def color_for_word(w): return COLOR_POOL[_hash(w) % len(COLOR_POOL)]
 
-          _FONT_CACHE = {}
-          _FONT_MISSING = set()
-          _FONT_LOADED = {}
+          _FONT_CACHE, _FONT_MISSING, _FONT_LOADED = {}, set(), {}
 
-          def _has_deva(s): return any('\u0900' <= ch <= '\u097F' for ch in str(s))
-          def _has_arab(s): return any('\u0600' <= ch <= '\u06FF' for ch in str(s))
+          def _has_deva(s): return any('\u0900'<=ch<='\u097F' for ch in str(s))
+          def _has_arab(s): return any('\u0600'<=ch<='\u06FF' for ch in str(s))
 
           def _pick_font(text, fb):
               s = str(text)
@@ -301,7 +301,7 @@ jobs:
                             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
               }
               n = name.lower()
-              k = "deva" if "devanagari" in n else "arab" if "arabic" in n or "naskh" in n else "latin"
+              k = "deva" if "devanagari" in n else "arab" if ("arabic" in n or "naskh" in n) else "latin"
               for p in pools[k]:
                   if os.path.exists(p):
                       try:
@@ -359,22 +359,21 @@ jobs:
           def reveal(full, el, rate=0.28):
               ws = sanitize(full).split()
               if not ws: return ""
-              return " ".join(ws[:max(0, min(len(ws), int(el/rate)+1))])
+              return " ".join(ws[:max(0,min(len(ws),int(el/rate)+1))])
 
-          def draw_vstack(img, hi_w, ar_w, en_w, hi_idx, ar_idx, en_idx, pal, fonts):
-              """✅ हर language का अपना index — perfect sync"""
+          def draw_vstack(img, hi_w, ar_w, en_w, hi_i, ar_i, en_i, pal, fonts):
               try:
                   d = ImageDraw.Draw(img)
-                  ch = hi_w[hi_idx] if hi_idx < len(hi_w) else ""
-                  ca = ar_w[ar_idx] if ar_idx < len(ar_w) else ""
-                  ce = en_w[en_idx] if en_idx < len(en_w) else ""
+                  ch = hi_w[hi_i] if hi_i < len(hi_w) else ""
+                  ca = ar_w[ar_i] if ar_i < len(ar_w) else ""
+                  ce = en_w[en_i] if en_i < len(en_w) else ""
                   if not (ch or ca or ce): return img
                   lh = 115
-                  sy = int(H * TEXT_Y_POSITION) - (3*lh)//2
-                  dr = 16; dx = int(W * 0.12); wx = dx + dr + 25
+                  sy = int(H*TEXT_Y_POSITION) - (3*lh)//2
+                  dr = 16; dx = int(W*0.12); wx = dx + dr + 25
                   mw = W - wx - 40
-                  rows = [(ch, fonts["hi"], sy, "hi"), (ca, fonts["ar"], sy+lh, "ar"),
-                          (ce, fonts["en"], sy+2*lh, "en")]
+                  rows = [(ch,fonts["hi"],sy,"hi"),(ca,fonts["ar"],sy+lh,"ar"),
+                          (ce,fonts["en"],sy+2*lh,"en")]
                   for word, font, y, lg in rows:
                       if not word: continue
                       try:
@@ -384,18 +383,18 @@ jobs:
                       color = color_for_word(word)
                       d.ellipse([dx-dr,y-dr,dx+dr,y+dr], fill=color+(255,))
                       ws = _trunc(d, word, font, mw, "lm")
-                      for ax, ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                      for ax,ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
                           d.text((wx+ax,y+ay), ws, fill=(0,0,0,200), font=font, anchor="lm")
                       d.text((wx,y), ws, fill=tuple(pal["text"])+(255,), font=font, anchor="lm")
                   return img
               except Exception as e:
                   print(f"[STACK] {e}"); return img
 
-          MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney",
-                         "harp","melody","song","music","instrument","beat","edm",
-                         "jazz","rock","saxophone","trumpet","orchestra","rap","pop"]
-          NON_ISLAMIC_BLOCK = ["girl","boy","woman","man","people","dance","wine",
-                               "alcohol","dog","pig","cross","church","idol","nude","bikini","bar","party"]
+          MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney","harp",
+                         "melody","song","music","instrument","beat","edm","jazz","rock",
+                         "saxophone","trumpet","orchestra","rap","pop"]
+          NON_ISLAMIC_BLOCK = ["girl","boy","woman","man","people","dance","wine","alcohol",
+                               "dog","pig","cross","church","idol","nude","bikini","bar","party"]
           NATURE_WORDS = ["rain","wind","bird","water","forest","thunder","ocean","river",
                           "stream","leaves","desert","night","crickets","waterfall","storm",
                           "waves","fire","nature","ambient","soft","quiet","calm","breeze"]
@@ -403,9 +402,9 @@ jobs:
                       "calligraphy","night sky","stars","desert","mountain","sea","ocean",
                       "clouds","sunrise","sunset","moon","lantern","architecture","pattern",
                       "geometric","minaret","dome","quran","book","prayer","peaceful","sky","cloud"]
-          SAFE_BG = ["mosque exterior night empty", "desert landscape sunrise",
-                     "islamic architecture pattern", "night sky stars time lapse",
-                     "arabic calligraphy closeup", "mountain landscape sunset"]
+          SAFE_BG = ["mosque exterior night empty","desert landscape sunrise",
+                     "islamic architecture pattern","night sky stars time lapse",
+                     "arabic calligraphy closeup","mountain landscape sunset"]
 
           def val_pal(p):
               if not isinstance(p, dict): return dict(FB_PALETTE)
@@ -413,13 +412,13 @@ jobs:
                   r = {"name": str(p.get("name","Custom"))[:40]}
                   for k in ["primary","secondary","text","accent","glow"]:
                       rgb = p.get(k, FB_PALETTE[k])
-                      if not isinstance(rgb, list) or len(rgb) != 3: return dict(FB_PALETTE)
+                      if not isinstance(rgb,list) or len(rgb)!=3: return dict(FB_PALETTE)
                       r[k] = [max(0,min(255,int(x))) for x in rgb]
                   return r
               except: return dict(FB_PALETTE)
 
           def val_bg(q):
-              if not q or not isinstance(q, str): return None
+              if not q or not isinstance(q,str): return None
               ql = q.lower()
               for b in NON_ISLAMIC_BLOCK + MUSIC_BLOCK:
                   if b in ql: return None
@@ -428,7 +427,7 @@ jobs:
               return None
 
           def val_amb(q):
-              if not q or not isinstance(q, str): return None
+              if not q or not isinstance(q,str): return None
               ql = q.lower()
               for b in MUSIC_BLOCK:
                   if b in ql: return None
@@ -437,13 +436,13 @@ jobs:
               return None
 
           def val_tags(t):
-              if not isinstance(t, list): return []
+              if not isinstance(t,list): return []
               c = [x for x in t if isinstance(x,str) and x.startswith("#") and len(x)<40]
-              return c[:8] if len(c) >= 3 else []
+              return c[:8] if len(c)>=3 else []
 
-          R = {"errors": [], "warnings": [], "hadith": {}, "video": {}, "drive": {}, "fb": {},
-               "plat": {"hadith":"-","ambience":"-","bg":"-","tts":"-","trans":"-"},
-               "es": {"dots": 0, "palette": "none"}, "fonts": {}, "aic": {}, "sync": {}}
+          R = {"errors":[],"warnings":[],"hadith":{},"video":{},"drive":{},"fb":{},
+               "plat":{"hadith":"-","ambience":"-","bg":"-","tts":"-","trans":"-"},
+               "es":{"dots":0,"palette":"none"},"fonts":{},"aic":{},"sync":{}}
 
           def log_err(m): R["errors"].append(str(m)[:200]); print(f"[ERR] {m}")
           def log_warn(m): R["warnings"].append(str(m)[:200]); print(f"[WARN] {m}")
@@ -456,7 +455,7 @@ jobs:
               try:
                   r = session.get(url, timeout=35)
                   if r.status_code == 200 and len(r.content) > minsize:
-                      with open(path, "wb") as f: f.write(r.content)
+                      with open(path,"wb") as f: f.write(r.content)
                       return True
               except: pass
               return False
@@ -477,7 +476,7 @@ jobs:
           def hijri():
               try:
                   d = datetime.utcnow()
-                  gy, gm, gd = d.year, d.month, d.day
+                  gy,gm,gd = d.year,d.month,d.day
                   a = (14-gm)//12; y = gy+4800-a; m = gm+12*a-3
                   jdn = gd + (153*m+2)//5 + 365*y + y//4 - y//100 + y//400 - 32045
                   l = jdn - 1948440 + 10632; n = (l-1)//10631; l = l - 10631*n + 354
@@ -516,7 +515,8 @@ jobs:
                           pl = {"model":model,"messages":[{"role":"user","content":prompt}],
                                 "temperature":0.9,"max_tokens":mx}
                           if jm: pl["response_format"] = {"type":"json_object"}
-                          r = session.post(url, headers={**h,"Content-Type":"application/json"}, json=pl, timeout=60)
+                          r = session.post(url, headers={**h,"Content-Type":"application/json"},
+                              json=pl, timeout=60)
                           if r.status_code == 200:
                               return r.json()["choices"][0]["message"]["content"].strip()
                   except: continue
@@ -550,21 +550,21 @@ jobs:
               if it and not it.endswith("।") and not it.endswith("?"): it += "।"
               em = str(p.get("emotion","calm")).lower().strip()
               if em not in ["calm","khushu","tawbah","shukr","dhikr"]: em = "calm"
-              pal = val_pal(p.get("color_palette", {}))
+              pal = val_pal(p.get("color_palette",{}))
               bq = []
-              for q in p.get("bg_queries", [])[:3]:
+              for q in p.get("bg_queries",[])[:3]:
                   v = val_bg(q)
                   if v: bq.append(v)
               if not bq: bq = random.sample(SAFE_BG, 3)
-              tags = val_tags(p.get("hashtags", []))
+              tags = val_tags(p.get("hashtags",[]))
               if not tags: tags = ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
-              return {"hook": hk, "intro": it, "title": sf("title","Hadith"),
-                      "emotion": em, "outro_main": sf("outro_main","Fi Amanillah"),
-                      "outro_cta": sf("outro_cta","इस हदीस को शेयर करें।"),
-                      "hashtags": tags, "palette": pal, "bg_queries": bq,
-                      "ambience_query": val_amb(p.get("ambience_query","")) or "gentle rain nature",
-                      "engagement_text": sf("engagement_text","याद रखें"),
-                      "sound_hint_text": sf("sound_hint_text","सुनिए")}
+              return {"hook":hk,"intro":it,"title":sf("title","Hadith"),
+                      "emotion":em,"outro_main":sf("outro_main","Fi Amanillah"),
+                      "outro_cta":sf("outro_cta","इस हदीस को शेयर करें।"),
+                      "hashtags":tags,"palette":pal,"bg_queries":bq,
+                      "ambience_query":val_amb(p.get("ambience_query","")) or "gentle rain nature",
+                      "engagement_text":sf("engagement_text","याद रखें"),
+                      "sound_hint_text":sf("sound_hint_text","सुनिए")}
 
           def deepl(text):
               k = os.environ.get("DEEPL_API_KEY")
@@ -572,7 +572,7 @@ jobs:
               try:
                   r = session.post("https://api-free.deepl.com/v2/translate",
                       headers={"Authorization":f"DeepL-Auth-Key {k}"},
-                      data={"text":text, "target_lang":"HI"}, timeout=25)
+                      data={"text":text,"target_lang":"HI"}, timeout=25)
                   if r.status_code == 200:
                       R["plat"]["trans"] = "DeepL"
                       return r.json()["translations"][0]["text"]
@@ -585,9 +585,9 @@ jobs:
               for v in ["hi-IN-MadhurNeural","ur-IN-SalmanNeural"]:
                   try:
                       tmp = out + ".txt"
-                      with open(tmp, "w", encoding="utf-8") as f: f.write(text)
+                      with open(tmp,"w",encoding="utf-8") as f: f.write(text)
                       if os.path.exists(out): os.remove(out)
-                      subprocess.run(f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-8% --pitch=-2Hz',
+                      subprocess.run(f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-15% --pitch=-2Hz',
                                      shell=True, check=True, timeout=120)
                       if os.path.exists(tmp): os.remove(tmp)
                       if ck(out): return True, v
@@ -599,7 +599,7 @@ jobs:
               if not os.path.exists(m): return False, "no model"
               try:
                   tmp = out + ".wav"
-                  subprocess.run(f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.15',
+                  subprocess.run(f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.25',
                                  shell=True, check=True, timeout=90)
                   if os.path.exists(tmp) and os.path.getsize(tmp) > 5000:
                       run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
@@ -611,7 +611,7 @@ jobs:
           def gen_tts(text, out):
               text = sanitize(text)
               if not text: return False
-              for name, fn in [("edge", tts_edge), ("piper", tts_piper)]:
+              for name, fn in [("edge",tts_edge),("piper",tts_piper)]:
                   if os.path.exists(out):
                       try: os.remove(out)
                       except: pass
@@ -736,7 +736,7 @@ jobs:
                           hs = r.json().get("hadiths", [])
                           if not hs: continue
                           eng = sanitize(hs[0].get("text",""))
-                          if not (150 <= len(eng) <= 700): continue
+                          if not (100 <= len(eng) <= 500): continue
                           ara = ""
                           try:
                               ar = session.get(f"{base}/editions/{book['ara']}/{num}.json", timeout=10)
@@ -748,8 +748,8 @@ jobs:
                           try:
                               with open("recent.json","w") as f: json.dump(recent, f)
                           except: pass
-                          R["hadith"] = {"collection": book["name"], "number": str(hs[0].get("hadithnumber") or num),
-                                         "english": eng, "arabic": ara, "chars": len(eng)}
+                          R["hadith"] = {"collection":book["name"],"number":str(hs[0].get("hadithnumber") or num),
+                                         "english":eng,"arabic":ara,"chars":len(eng)}
                           R["plat"]["hadith"] = f"fawazahmed0/{book['eng']}"
                           return R["hadith"]
                       except: continue
@@ -800,8 +800,7 @@ jobs:
                                         outline=tuple(pal["primary"])+(255,), width=2)
                   cd.text((cx+15,cy+12), _trunc(cd,coll,fs,cw-30,"la"), fill=tuple(pal["glow"])+(255,), font=fs)
                   cd.text((cx+15,cy+42), f"#{num}", fill=tuple(pal["text"])+(220,), font=fxs)
-                  if hj:
-                      cd.text((cx+15,cy+64), _trunc(cd,hj,fxs,cw-30,"la"), fill=tuple(pal["secondary"])+(220,), font=fxs)
+                  if hj: cd.text((cx+15,cy+64), _trunc(cd,hj,fxs,cw-30,"la"), fill=tuple(pal["secondary"])+(220,), font=fxs)
                   return Image.alpha_composite(img,c)
               except: return img
 
@@ -850,15 +849,15 @@ jobs:
 
           def build_msg(status="COMPLETED", note=""):
               dur = int(time.time()-RUN_START)
-              L = ["ISLAMIC HADITH STORY", "=============="]
+              L = ["ISLAMIC HADITH STORY","=============="]
               L.append(f"STATUS: {status}")
               if note: L.append(f"Note: {note}")
               L.append(f"Time: {dur//60}m {dur%60}s")
               L.append("PLATFORMS:")
-              for k, v in R["plat"].items(): L.append(f"  {k}: {v}")
+              for k,v in R["plat"].items(): L.append(f"  {k}: {v}")
               if R["sync"]:
                   L.append("SYNC:")
-                  for k, v in R["sync"].items(): L.append(f"  {k}: {v}")
+                  for k,v in R["sync"].items(): L.append(f"  {k}: {v}")
               if R["fonts"]:
                   L.append("FONTS:")
                   for k in list(R["fonts"].keys())[:6]: L.append(f"  OK {k}")
@@ -887,7 +886,7 @@ jobs:
                   except: pass
 
           def main():
-              print("Starting with sync fix...")
+              print("Starting v22 - sentence-based sync...")
               for fname, sz in {"NotoSans-Bold.ttf":48,"NotoSans-Regular.ttf":32,
                   "NotoSansDevanagari-Bold.ttf":68,"NotoSansDevanagari-Regular.ttf":48,
                   "NotoNaskhArabic-Bold.ttf":72,"NotoNaskhArabic-Regular.ttf":48}.items():
@@ -898,7 +897,9 @@ jobs:
               if not h.get("english"):
                   send_report("FAILED","Hadith"); sys.exit(1)
 
-              hindi = deepl(h["english"]) or call_ai(f"Is English Hadith ka natural Hindi tarjuma likho:\n\n{h['english']}", task="hindi") or h["english"]
+              hindi = deepl(h["english"]) or call_ai(
+                  f"Is English Hadith ka natural Hindi tarjuma likho:\n\n{h['english']}",
+                  task="hindi") or h["english"]
               hindi = sanitize(re.sub(r"^```.*?```","",hindi,flags=re.DOTALL))
               hindi = add_prophet(add_allah(hindi))
 
@@ -908,56 +909,57 @@ jobs:
               R["es"]["palette"] = palette.get("name","custom")
 
               # ═══════════════════════════════════════════════════════════
-              # ✅ TTS with SLOWER rate
+              # ✅ KEY FIX: Voice और Typing SAME TEXT
+              # Voice सिर्फ़ Hindi बोलती है, इसलिए typing भी Hindi को
+              # voice के साथ align करो — Arabic/English को भी उसी
+              # timeline पर proportionally distribute करो
               # ═══════════════════════════════════════════════════════════
-              tts_text = f"{aic.get('intro','')} {hindi}".strip()
-              if not gen_tts(tts_text, "s_raw.mp3"):
+              voice_text = f"{aic.get('intro','')} {hindi}".strip()
+              if not gen_tts(voice_text, "s_raw.mp3"):
                   send_report("FAILED","TTS"); sys.exit(1)
 
               proc_voice("s_raw.mp3", "s_clean.mp3")
               vdur = MP3("s_clean.mp3").info.length
-              print(f"[AUDIO] raw voice = {vdur:.2f}s")
+              print(f"[AUDIO] voice = {vdur:.2f}s")
 
-              # ═══════════════════════════════════════════════════════════
-              # ✅ SYNC CALCULATION — हर layer का अपना word rate
-              # ═══════════════════════════════════════════════════════════
-              hw = sanitize(hindi).split()
-              aw = sanitize_ar(h.get("arabic","")).split()
-              ew = sanitize(h.get("english","")).split()
+              # ✅ Words निकालो
+              hi_words = sanitize(hindi).split()
+              ar_words = sanitize_ar(h.get("arabic","")).split()
+              en_words = sanitize(h.get("english","")).split()
 
-              n_hi, n_ar, n_en = max(1,len(hw)), max(1,len(aw)), max(1,len(ew))
+              n_hi, n_ar, n_en = max(1,len(hi_words)), max(1,len(ar_words)), max(1,len(en_words))
 
-              # हर layer को voice duration में fit करो, लेकिन minimum 0.5s per word
-              dur_hi = max(vdur / n_hi, MIN_WORD_DUR)
-              dur_ar = max(vdur / n_ar, MIN_WORD_DUR)
-              dur_en = max(vdur / n_en, MIN_WORD_DUR)
+              # ✅ हर language की speed word-length के हिसाब से
+              # Hindi = ज़्यादा words (translation), English = कम (original)
+              # सब को voice के साथ finish होना चाहिए
 
-              # अगर सबसे slow layer voice से ज़्यादा लंबा है → voice extend करो
-              needed = max(n_hi * dur_hi, n_ar * dur_ar, n_en * dur_en)
-              if needed > vdur + 0.5:
-                  extra = needed - vdur + 0.5
+              # Hindi rate = voice duration / Hindi word count
+              # लेकिन minimum 0.55s प्रति word (readability के लिए)
+              MIN_DUR = 0.55
+              dur_hi = max(vdur / n_hi, MIN_DUR)
+              dur_ar = max(vdur / n_ar, MIN_DUR)
+              dur_en = max(vdur / n_en, MIN_DUR)
+
+              # जो सबसे slow layer है उसकी speed के हिसाब से पूरा video length
+              slowest_needed = max(n_hi * dur_hi, n_ar * dur_ar, n_en * dur_en)
+              print(f"[SYNC] hi:{n_hi}@{dur_hi:.3f}s | ar:{n_ar}@{dur_ar:.3f}s | "
+                    f"en:{n_en}@{dur_en:.3f}s | slowest={slowest_needed:.2f}s | voice={vdur:.2f}s")
+
+              # अगर voice बहुत छोटी है → voice को extend करो silence से
+              if slowest_needed > vdur + 0.3:
+                  extra = slowest_needed - vdur + 0.3
                   print(f"[SYNC] Extending voice by {extra:.2f}s")
                   run(f'ffmpeg -y -i s_clean.mp3 -af "apad=pad_dur={extra:.2f}" s_v.mp3')
                   vdur = MP3("s_v.mp3").info.length
               else:
                   os.replace("s_clean.mp3", "s_v.mp3")
 
-              # अगर voice बहुत लंबी है → last words को hold करो
-              # (हम करते नहीं, last word screen पर hold रहेगा)
               R["sync"] = {
-                  "hindi_words": n_hi,
-                  "arabic_words": n_ar,
-                  "english_words": n_en,
-                  "dur_hi": f"{dur_hi:.3f}s",
-                  "dur_ar": f"{dur_ar:.3f}s",
-                  "dur_en": f"{dur_en:.3f}s",
+                  "hi_words": n_hi, "ar_words": n_ar, "en_words": n_en,
+                  "dur_hi": f"{dur_hi:.3f}s", "dur_ar": f"{dur_ar:.3f}s", "dur_en": f"{dur_en:.3f}s",
                   "voice_final": f"{vdur:.2f}s",
               }
-              print(f"[SYNC] hi={n_hi}@{dur_hi:.3f}s | ar={n_ar}@{dur_ar:.3f}s | en={n_en}@{dur_en:.3f}s | voice={vdur:.2f}s")
 
-              # ═══════════════════════════════════════════════════════════
-              # Ambience mix
-              # ═══════════════════════════════════════════════════════════
               get_amb(aic.get("ambience_query","rain nature"))
               fade = max(vdur - 3.0, 1.0)
               mix = (f"[0:a]volume=1.6,acompressor=threshold=-20dB:ratio=4:attack=5:release=150,"
@@ -988,7 +990,7 @@ jobs:
               GS = {"dots": 0}
 
               # ═══════════════════════════════════════════════════════════
-              # ✅ FRAME LOOP — independent index per language
+              # ✅ FRAME LOOP — independent index
               # ═══════════════════════════════════════════════════════════
               for fi in range(tf):
                   t = fi / fps
@@ -1014,13 +1016,12 @@ jobs:
                       d.text((W//2, int(H*0.68)), BRAND_NAME, fill=tuple(palette["primary"])+(ba,), font=F["s"], anchor="mm")
                   elif t < intro + vdur:
                       mt = t - intro
-                      # ✅ हर layer का अपना index
                       hi_i = min(int(mt / dur_hi), n_hi - 1) if mt > 0 else 0
                       ar_i = min(int(mt / dur_ar), n_ar - 1) if mt > 0 else 0
                       en_i = min(int(mt / dur_en), n_en - 1) if mt > 0 else 0
-                      for wl, idx in [(hw, hi_i), (aw, ar_i), (ew, en_i)]:
+                      for wl, idx in [(hi_words,hi_i),(ar_words,ar_i),(en_words,en_i)]:
                           if idx < len(wl): GS["dots"] += 1
-                      img = draw_vstack(img, hw, aw, ew, hi_i, ar_i, en_i, palette, F)
+                      img = draw_vstack(img, hi_words, ar_words, en_words, hi_i, ar_i, en_i, palette, F)
                       d = ImageDraw.Draw(img)
                   else:
                       ot = t - (intro + vdur)
