@@ -1,4 +1,4 @@
-name: "🔵FACEBOOK STORY"
+name: "🔵FACEBOOK_STORY"
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
 
     env:
       CACHE_VERSION: v24
-      DEPS_DIR: ${{ github.workspace }}/.dependencies
+      DEPS_DIR: ${{ github.workspace }}.dependencies
 
     steps:
       - name: Checkout Repository
@@ -954,7 +954,7 @@ PYEOF
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
+          UPLOAD_TO_SOCIAL: '${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}'  # <--- यहाँ single quotes जोड़े गए हैं
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
           DEPS_DIR: ${{ env.DEPS_DIR }}
           PIPER_DIR: ${{ env.DEPS_DIR }}/piper
