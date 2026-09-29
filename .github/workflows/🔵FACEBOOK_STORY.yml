@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v16
+      CACHE_VERSION: v17
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -73,13 +73,14 @@ jobs:
 
           mkdir -p "Social media/Facebook"
           cp "temp_private_repo/Social media/Facebook/Story_video.py" \
-             "Social media/Facebook/Story_video.py" 2>/dev/null || true
+             "Social media/Facebook/Story_video.py"
 
           if [ -f "Social media/Facebook/Story_video.py" ]; then
             LINES=$(wc -l < "Social media/Facebook/Story_video.py")
             echo "Script copied — $LINES lines"
           else
-            echo "Script missing in repo, using workspace script"
+            echo "Script copy failed"
+            exit 1
           fi
 
           rm -rf temp_private_repo
@@ -119,13 +120,13 @@ jobs:
               echo "Cache broken - reinstalling"
               rm -f "$MARKER"
               sudo apt-get update -q
-              sudo apt-get install -y -q --reinstall ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+              sudo apt-get install -y -q --reinstall ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
               sudo ldconfig
             fi
           else
             echo "Fresh install of FFmpeg + SoX + espeak-ng"
             sudo apt-get update -q
-            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
             sudo ldconfig
           fi
 
@@ -154,20 +155,11 @@ jobs:
       - name: Custom Fonts Cache-Aware
         run: |
           FORCE_DOWNLOAD=0
-          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ] && FORCE_DOWNLOAD=1
-          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoSans-Bold.ttf" ] && FORCE_DOWNLOAD=1
           [ ! -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ] && FORCE_DOWNLOAD=1
           [ ! -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" ] && FORCE_DOWNLOAD=1
 
-          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
-            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" 2>/dev/null || echo 0)
-            if [ "$SZ" -lt 100000 ]; then
-              echo "NotoEmoji-Regular.ttf too small - forcing re-download"
-              FORCE_DOWNLOAD=1
-            fi
-          fi
-
-          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
+          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
             echo "Custom fonts CACHED"
           else
             echo "Downloading fonts"
@@ -181,9 +173,6 @@ jobs:
               ["NotoSansDevanagari-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
               ["NotoNaskhArabic-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
               ["NotoNaskhArabic-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
-              ["NotoEmoji-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Regular.ttf"
-              ["NotoEmoji-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoEmoji-Bold.ttf"
-              ["NotoColorEmoji.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf"
             )
 
             for name in "${!FONTS[@]}"; do
@@ -218,14 +207,42 @@ jobs:
           echo "~/.fonts contents"
           ls -la ~/.fonts/
 
-          echo "Checking key fonts"
-          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf; do
-            if [ -f "$HOME/.fonts/$f" ]; then
-              echo "OK: $f"
+          # ═══════════════════════════════════════════════════════════════
+          # ✅ HARD VERIFY: Critical fonts present
+          # ═══════════════════════════════════════════════════════════════
+          echo "═══ CRITICAL FONT VERIFICATION ═══"
+          CRITICAL_FONTS=(
+            "NotoSans-Regular.ttf"
+            "NotoSans-Bold.ttf"
+            "NotoSansDevanagari-Regular.ttf"
+            "NotoSansDevanagari-Bold.ttf"
+            "NotoNaskhArabic-Regular.ttf"
+            "NotoNaskhArabic-Bold.ttf"
+          )
+
+          MISSING=0
+          for f in "${CRITICAL_FONTS[@]}"; do
+            if [ -f "$DEPS_DIR/fonts/$f" ] && [ "$(stat -c%s "$DEPS_DIR/fonts/$f")" -gt 50000 ]; then
+              echo "OK: $f ($(stat -c%s "$DEPS_DIR/fonts/$f") bytes)"
             else
-              echo "MISSING: $f"
+              echo "MISSING/BAD: $f"
+              MISSING=$((MISSING+1))
             fi
           done
+
+          if [ $MISSING -gt 0 ]; then
+            echo "CRITICAL: $MISSING fonts missing — aborting"
+            exit 1
+          fi
+
+          mkdir -p ~/.fonts
+          cp -f "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          fc-cache -fv ~/.fonts/ > /dev/null 2>&1 || true
+
+          echo "--- fontconfig match test ---"
+          fc-match "Noto Sans Devanagari:bold" 2>/dev/null || echo "Devanagari not matched"
+          fc-match "Noto Naskh Arabic:bold" 2>/dev/null || echo "Arabic not matched"
+          echo "═══ ALL FONTS VERIFIED ═══"
 
       - name: Python Packages Cache-Aware
         run: |
@@ -293,7 +310,7 @@ jobs:
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
-          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf; do
+          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf; do
             if [ -f "$DEPS_DIR/fonts/$f" ]; then
               SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
               add_entry "font-$f" "ok" "$SZ bytes"
@@ -350,15 +367,7 @@ jobs:
           DEPS_DIR: ${{ env.DEPS_DIR }}
           PIPER_DIR: ${{ env.DEPS_DIR }}/piper
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
-        run: |
-          if [ -f "Social media/Facebook/Story_video.py" ]; then
-            python3 "Social media/Facebook/Story_video.py"
-          elif [ -f "Story_video.py" ]; then
-            python3 "Story_video.py"
-          else
-            echo "Error: Story_video.py file not found!"
-            exit 1
-          fi
+        run: python3 "Social media/Facebook/Story_video.py"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
