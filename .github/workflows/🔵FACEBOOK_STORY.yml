@@ -1,42 +1,48 @@
-name: "🏢 SAWAJ STUDIO — Ghatak Company"
+# ═══════════════════════════════════════════════════════════════════════════
+# 🔵 FACEBOOK STORY AUTOMATION — SINGLE FILE YAML (VERTICAL STACK UPGRADE)
+# ═══════════════════════════════════════════════════════════════════════════
+# ✅ Ek hi file — kuch bhi delete nahi hoga
+# ✅ Python script inline — private repo ki zaroorat nahi
+# ✅ Vertical stack text (screenshot jaisa)
+# ✅ NO chakor box anywhere
+# ✅ Cache properly handled
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: "🔵 FACEBOOK STORY"
 
 on:
   workflow_dispatch:
     inputs:
       upload_to_social:
+        description: 'Upload to Facebook Story?'
         required: true
         type: boolean
         default: false
   schedule:
-    - cron: '30 23 * * *'
+    - cron: '30 23 * * *'   # 5:00 AM IST daily
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 concurrency:
-  group: fb-story-${{ github.ref }}
+  group: facebook-story
   cancel-in-progress: false
 
 jobs:
-  company-run:
+  fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+
     env:
-      CACHE_VERSION: v29
+      CACHE_VERSION: v8
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
-      # ═══════════════════════════════════════════════════════════════
-      # 01 | 🚪 DARWAAN — Repo Checkout
-      # ═══════════════════════════════════════════════════════════════
-      - name: "01|Checkout"
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ───────────────────────────────────────────────────────────────
-      # 02 | 🚪 DARWAAN — Cache (public-safe)
-      # ───────────────────────────────────────────────────────────────
-      - name: "02|Cache"
+      - name: 🗂️ Restore Master Cache
         id: master-cache
         uses: actions/cache@v4
         with:
@@ -44,149 +50,187 @@ jobs:
             .dependencies
             ~/.cache/pip
             ~/.local/share/piper
-          key: ${{ runner.os }}-fb-${{ env.CACHE_VERSION }}-${{ github.ref_name }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
           restore-keys: |
-            ${{ runner.os }}-fb-${{ env.CACHE_VERSION }}-${{ github.ref_name }}-
-            ${{ runner.os }}-fb-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-master-
 
-      # ───────────────────────────────────────────────────────────────
-      # 03 | 🚪 DARWAAN — Folder Create (Company Godown)
-      # ───────────────────────────────────────────────────────────────
-      - name: "03|Setup Folders"
+      - name: 📁 Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,libs}
-          mkdir -p src/fetchers src/ai src/voice src/video src/uploaders src/utils
-          mkdir -p assets
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
-          echo "📁 Company structure ready:"
-          find . -maxdepth 2 -type d | sort
+          echo "✅ Deps folder ready: $DEPS_DIR"
 
-      # ───────────────────────────────────────────────────────────────
-      # 04 | 🚪 DARWAAN — Python Setup
-      # ───────────────────────────────────────────────────────────────
-      - name: "04|Python"
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ───────────────────────────────────────────────────────────────
-      # 05 | 🚪 DARWAAN — FFmpeg + System Tools
-      # ───────────────────────────────────────────────────────────────
-      - name: "05|SystemTools"
+      - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
         run: |
-          MARKER="$DEPS_DIR/.ffmpeg_ok";LIB_DIR="$DEPS_DIR/libs"
-          if [ -f "$MARKER" ]&&[ -f "$DEPS_DIR/bin/ffmpeg" ]&&[ -f "$DEPS_DIR/bin/sox" ];then
-            echo "📦 CACHED"
-            if [ -d "$LIB_DIR" ];then sudo mkdir -p /usr/lib/x86_64-linux-gnu;sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null||true;sudo ldconfig;fi
-            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg 2>/dev/null||true
-            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null||true
-            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox 2>/dev/null||true
-            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox 2>/dev/null||true
-            [ -f "$DEPS_DIR/bin/espeak-ng" ]&&sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng&&sudo chmod +x /usr/local/bin/espeak-ng||true
-            if [ -d "$DEPS_DIR/system-fonts/truetype" ];then sudo cp -rn "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null||true;sudo fc-cache -f>/dev/null 2>&1||true;fi
+          MARKER="$DEPS_DIR/.ffmpeg_ok"
+          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/ffprobe" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
+            echo "⚡ FFmpeg + SoX CACHED"
+            sudo mkdir -p /usr/local/bin
+            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
+            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
+            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox
+            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
+              sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
+              sudo fc-cache -f > /dev/null 2>&1 || true
+            fi
+            if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
+              sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
+              sudo chmod +x /usr/local/bin/espeak-ng
+            fi
           else
-            echo "📥 Installing fresh..."
+            echo "📥 Installing FFmpeg + SoX + espeak-ng"
             sudo apt-get update -q
-            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
-            sudo ldconfig
+            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
+              fonts-noto fonts-noto-core fonts-noto-extra \
+              fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+            cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
+            cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe"
+            cp "$(which sox)" "$DEPS_DIR/bin/sox"
+            cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
+            mkdir -p "$DEPS_DIR/system-fonts/truetype"
+            cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
+            touch "$MARKER"
           fi
-          mkdir -p "$DEPS_DIR/bin" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
-          cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg" 2>/dev/null||true
-          cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null||true
-          cp "$(which sox)" "$DEPS_DIR/bin/sox" 2>/dev/null||true
-          cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" 2>/dev/null||true
-          for bin in ffmpeg ffprobe sox;do LDD=$(ldd "$(which $bin)" 2>/dev/null|grep "=> /"|awk '{print $3}');for lib in $LDD;do [ -f "$lib" ]&&cp -n "$lib" "$LIB_DIR/" 2>/dev/null||true;done;done
-          cp -rn /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null||true
-          touch "$MARKER"
+          ffmpeg -version | head -1
+          sox --version
 
-      # ───────────────────────────────────────────────────────────────
-      # 06 | 🚪 DARWAAN — Fonts (Hindi/Arabic/Emoji)
-      # ───────────────────────────────────────────────────────────────
-      - name: "06|Fonts"
+      - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
-          mkdir -p "$DEPS_DIR/fonts"
-          declare -A F=(
-            ["NotoSans-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
-            ["NotoSans-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
-            ["NotoSansDevanagari-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"
-            ["NotoSansDevanagari-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
-            ["NotoNaskhArabic-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
-            ["NotoNaskhArabic-Bold.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
-            ["NotoEmoji-Regular.ttf"]="https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoEmoji-Regular.ttf"
-          )
-          for n in "${!F[@]}";do P="$DEPS_DIR/fonts/$n";if [ ! -f "$P" ]||[ "$(stat -c%s "$P" 2>/dev/null||echo 0)" -lt 50000 ];then wget -q --timeout=90 "${F[$n]}" -O "$P"||true;fi;done
-          mkdir -p ~/.fonts;cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null||true
-          fc-cache -fv ~/.fonts/>/dev/null 2>&1||true
-          echo "✅ Fonts:";ls ~/.fonts/
+          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
+            echo "⚡ Custom fonts CACHED"
+          else
+            echo "📥 Downloading custom fonts"
+            mkdir -p "$DEPS_DIR/fonts"
+            declare -A FONTS=(
+              ["NotoSans-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
+              ["NotoSans-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
+              ["NotoSansDevanagari-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf"
+              ["NotoSansDevanagari-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf"
+              ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
+              ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
+            )
+            for name in "${!FONTS[@]}"; do
+              wget -q --timeout=30 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
+            done
+            touch "$DEPS_DIR/.fonts_ok"
+          fi
+          mkdir -p ~/.fonts
+          cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          fc-cache -f > /dev/null 2>&1 || true
 
-      # ───────────────────────────────────────────────────────────────
-      # 07 | 🚪 DARWAAN — Python Packages
-      # ───────────────────────────────────────────────────────────────
-      - name: "07|PipPackages"
+      - name: 🐍 Python Packages (Cache-Aware)
         run: |
           VENV="$DEPS_DIR/python-venv"
-          if [ -f "$VENV/.installed" ];then echo "📦 CACHED";else
-            rm -rf "$VENV";python3 -m venv "$VENV"
+          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen" 2>/dev/null; then
+            echo "⚡ Python packages CACHED"
+          else
+            echo "📥 Installing Python packages"
+            rm -rf "$VENV"
+            python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
-            "$VENV/bin/pip" install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib gTTS piper-tts numpy scipy soundfile
+            "$VENV/bin/pip" install --no-cache-dir \
+              requests edge-tts mutagen Pillow \
+              google-api-python-client google-auth-httplib2 google-auth-oauthlib
             touch "$VENV/.installed"
           fi
-          echo "$VENV/bin">>$GITHUB_PATH
+          echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ───────────────────────────────────────────────────────────────
-      # 08 | 🚪 DARWAAN — Piper Voice Model
-      # ───────────────────────────────────────────────────────────────
-      - name: "08|PiperVoice"
+      - name: 🎙️ Piper Models (Cache-Aware)
         run: |
           P="$DEPS_DIR/piper"
-          if [ -f "$P/.installed" ];then echo "📦 CACHED";else
-            rm -rf "$P";mkdir -p "$P";cd "$P"
-            B="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-            wget -q --timeout=120 "$B/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx||true
-            wget -q --timeout=120 "$B/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json||true
-            touch "$P/.installed";cd "$GITHUB_WORKSPACE"
+          if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
+            echo "⚡ Piper models CACHED"
+          else
+            echo "📥 Downloading Piper models"
+            rm -rf "$P" && mkdir -p "$P"
+            cd "$P"
+            BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx"      -O hi_IN-pratham-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx"      -O hi_IN-priyamvada-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json || true
+            touch "$P/.installed"
+            cd "$GITHUB_WORKSPACE"
           fi
-          echo "PIPER_DIR=$P">>$GITHUB_ENV
+          echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ═══════════════════════════════════════════════════════════════
-      # 09 | 🏭 COMPANY FACTORY — Build All 29 Files
-      # ═══════════════════════════════════════════════════════════════
-      - name: "09|BuildCompany"
+      - name: 🔍 Master Tool Health Check
+        id: health
         run: |
-          # ═══════════════════════════════════════════════════════════
-          # FILE 01 | 📒 ACCOUNTANT — src/02_config.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/02_config.py << 'EOF_CONFIG'
-          import os
-          
-          # Video settings
-          FPS = 25
-          INTRO_SEC = 3.5
-          OUTRO_SEC = 5.0
-          W, H = 1080, 1920
+          REPORT_FILE="$DEPS_DIR/tools_status.json"
+          echo "{" > "$REPORT_FILE"
+          echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
+          echo "  \"tools\": {" >> "$REPORT_FILE"
+          FIRST=1
+          add_entry() {
+            local name="$1"; local status="$2"; local detail="$3"
+            if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
+            FIRST=0
+            printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
+          }
+          if command -v ffmpeg >/dev/null 2>&1; then add_entry "ffmpeg" "ok" "present"; else add_entry "ffmpeg" "fail" "missing"; fi
+          if command -v sox >/dev/null 2>&1; then add_entry "sox" "ok" "present"; else add_entry "sox" "fail" "missing"; fi
+          if command -v espeak-ng >/dev/null 2>&1; then add_entry "espeak-ng" "ok" "present"; else add_entry "espeak-ng" "fail" "missing"; fi
+          if command -v edge-tts >/dev/null 2>&1; then add_entry "edge-tts" "ok" "present"; else add_entry "edge-tts" "fail" "missing"; fi
+          FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
+          add_entry "custom-fonts" "ok" "$FC files"
+          echo "  }" >> "$REPORT_FILE"
+          echo "}" >> "$REPORT_FILE"
+          echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
+          cat "$REPORT_FILE"
+
+      - name: 📝 Create Python Script
+        run: |
+          mkdir -p "scripts"
+          cat > "scripts/story_video.py" << 'PYEOF'
+          # ═══════════════════════════════════════════════════════════════════
+          # ISLAMIC HADITH STORY — VERTICAL STACK VERSION
+          # 3 lines (Hindi / Arabic / English) — one side, NO chakor box
+          # ═══════════════════════════════════════════════════════════════════
+          import os, re, time, random, subprocess, requests, shutil, sys, glob
+          import traceback, json, math
+          from datetime import datetime
+          from mutagen.mp3 import MP3
+          from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from requests.adapters import HTTPAdapter
+          from urllib3.util.retry import Retry
+
+          session = requests.Session()
+          session.mount("https://", HTTPAdapter(max_retries=Retry(
+              total=5, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])))
+
+          TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+          TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+          META_TOKEN = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
+          DEPS_DIR = os.environ.get("DEPS_DIR", os.path.expanduser("~/.dependencies"))
+          PIPER_DIR = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
+          TOOLS_STATUS_FILE = os.environ.get("TOOLS_STATUS_FILE", "")
+
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          should_post_social = (event_name == "schedule") or \
+                               (str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true")
+
+          RUN_START = time.time()
+          RUN_START_STR = datetime.utcnow().strftime("%d-%b-%Y %H:%M:%S UTC")
+          FPS, INTRO_SEC, OUTRO_SEC, W, H = 25, 3.5, 5.0, 1080, 1920
           VIDEO_MIN, VIDEO_MAX = 35.0, 62.0
-          VOICE_MIN = VIDEO_MIN - 3.2
-          VOICE_MAX = VIDEO_MAX - 3.2
-          
-          # Brand
+          VOICE_MIN, VOICE_MAX = VIDEO_MIN - 3.2, VIDEO_MAX - 3.2
+
           BRAND_NAME = "SAWAJ STUDIO"
           BRAND_HANDLE = "@SawajStudio"
           BISMILLAH_ARABIC = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
           AMEEN_ARABIC = "آمین ثم آمین"
-          
-          # Paths
-          DEPS_DIR = os.environ.get("DEPS_DIR", os.path.expanduser("~/.dependencies"))
-          FONTS_DIR = os.environ.get("FONTS_DIR", os.path.join(DEPS_DIR, "fonts"))
-          PIPER_DIR = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
-          
-          # Secrets
-          TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-          TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-          META_TOKEN = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
-          EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
-          SHOULD_POST_SOCIAL = (EVENT_NAME == "schedule") or (str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true")
-          
-          # 7 Hadith Books
+
           BOOKS = [
               {"eng": "eng-bukhari",  "ara": "ara-bukhari",  "name": "सहीह अल-बुख़ारी",    "max": 7563, "grade": "Sahih"},
               {"eng": "eng-muslim",   "ara": "ara-muslim",   "name": "सहीह मुस्लिम",       "max": 3032, "grade": "Sahih"},
@@ -196,30 +240,34 @@ jobs:
               {"eng": "eng-ibnmajah", "ara": "ara-ibnmajah", "name": "सुनन इब्न माजा",     "max": 4341, "grade": "Mixed"},
               {"eng": "eng-malik",    "ara": "ara-malik",    "name": "मुवत्ता मलिक",       "max": 1858, "grade": "Sahih"},
           ]
-          
-          # Colors
-          COLOR_POOL = [
-              (170, 100, 255), (255, 220, 60), (255, 150, 50), (80, 180, 255),
-              (100, 220, 100), (255, 100, 100), (255, 150, 200), (200, 150, 100),
-              (240, 240, 240), (100, 220, 200), (200, 140, 240), (255, 200, 100),
-              (150, 200, 100), (255, 180, 80), (140, 180, 220), (220, 150, 180),
-          ]
-          
+
           FB_PALETTE = {
               "name": "Royal Gold",
               "primary": [212, 175, 55], "secondary": [255, 220, 120],
               "text": [255, 245, 220], "accent": [255, 200, 80], "glow": [255, 220, 120],
           }
-          
-          # Blocklists
+
+          COLOR_POOL = [
+              (255, 100, 150), (80, 180, 255), (100, 220, 100),
+              (255, 200, 60),  (200, 140, 240), (255, 150, 80),
+              (140, 200, 255), (255, 130, 200), (150, 220, 180),
+              (255, 180, 100),
+          ]
+
+          def _hash(s):
+              h = 0
+              for c in str(s): h = (h * 31 + ord(c)) & 0xFFFFFFFF
+              return h
+
+          def color_for_word(word): return COLOR_POOL[_hash(word) % len(COLOR_POOL)]
+
           MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney",
                          "harp","melody","song","music","instrument","beat","hip hop",
                          "edm","jazz","rock","saxophone","trumpet","orchestra",
                          "symphony","tune","jingle","rap","pop"]
           NON_ISLAMIC_BLOCK = ["girl","boy","woman","man","people","dance","dancing",
                                "wine","alcohol","dog","pig","cross","church","temple",
-                               "idol","nude","sexy","bikini","bar","party","crowd",
-                               "pilgrim","worshipper","person","child","kid"]
+                               "idol","nude","sexy","bikini","bar","party","crowd"]
           NATURE_WORDS = ["rain","wind","bird","water","forest","thunder","ocean",
                           "river","stream","leaves","desert","night","crickets",
                           "waterfall","storm","waves","fire","nature","ambient",
@@ -237,44 +285,125 @@ jobs:
               "mountain landscape sunset", "ocean waves calm",
               "clouds sky timelapse", "islamic geometric pattern",
           ]
-          
-          SAHABA = ["Abu Huraira","Abu Hurairah","Aisha","Ibn Umar","Ibn Abbas","Anas",
-                    "Abu Bakr","Umar","Uthman","Ali","Ibn Masud","Abu Dharr","Abu Said",
-                    "Jabir","Abdullah","Zaid","Bilal","Salman","Abu Musa","Imran",
-                    "Hudhaifa","Umm Salama","Maymunah","Hafsa","Muadh","Anas bin Malik",
-                    "Ubadah bin Samit","Ubadah","Yahya","Malik","Nafi"]
-          EOF_CONFIG
-          echo "✅ 01 | 📒 Accountant ready"
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 02 | 🔧 HATHIYAAR — src/utils/19_helpers.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/utils/19_helpers.py << 'EOF_HELPERS'
-          import os, re, subprocess, requests, time
-          from datetime import datetime
-          from requests.adapters import HTTPAdapter
-          from urllib3.util.retry import Retry
-          
-          session = requests.Session()
-          session.mount("https://", HTTPAdapter(max_retries=Retry(
-              total=5, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])))
-          
+          def s_rgb(v):
+              try: return max(0, min(255, int(v)))
+              except Exception: return 128
+
+          def val_palette(p):
+              if not isinstance(p, dict): return dict(FB_PALETTE)
+              try:
+                  r = {"name": str(p.get("name", "Custom"))[:40]}
+                  for k in ["primary", "secondary", "text", "accent", "glow"]:
+                      rgb = p.get(k, FB_PALETTE[k])
+                      if not isinstance(rgb, list) or len(rgb) != 3: return dict(FB_PALETTE)
+                      r[k] = [s_rgb(rgb[0]), s_rgb(rgb[1]), s_rgb(rgb[2])]
+                  if sum(r["text"]) < 300: r["text"] = [255, 245, 220]
+                  return r
+              except Exception: return dict(FB_PALETTE)
+
+          def val_bg(q):
+              if not q or not isinstance(q, str): return None
+              ql = q.lower()
+              for b in NON_ISLAMIC_BLOCK + MUSIC_BLOCK:
+                  if b in ql: return None
+              for g in BG_ALLOW:
+                  if g in ql: return q.strip()[:80]
+              return None
+
+          def val_amb(q):
+              if not q or not isinstance(q, str): return None
+              ql = q.lower()
+              for b in MUSIC_BLOCK:
+                  if b in ql: return None
+              for g in NATURE_WORDS:
+                  if g in ql: return q.strip()[:60]
+              return None
+
+          def val_text(t, mx=200, mn=1):
+              if not t or not isinstance(t, str): return ""
+              t = str(t).strip()
+              if len(t) < mn or len(t) > mx: return ""
+              tl = t.lower()
+              for b in MUSIC_BLOCK:
+                  if b in tl: return ""
+              return t
+
+          def val_tags(tags):
+              if not isinstance(tags, list): return []
+              c = [t for t in tags if isinstance(t, str) and t.startswith("#") and len(t) < 40]
+              return c[:8] if len(c) >= 3 else []
+
+          R = {"steps": [], "errors": [], "warnings": [], "hadith": {}, "ai": [],
+               "tts": {}, "audio": [], "trans": {}, "amb": {}, "bg": {}, "logo": {},
+               "video": {}, "drive": {}, "fb": {}, "tools": {}, "enh": [], "aic": {},
+               "es": {"font": False, "words": 0, "dots": 0, "palette": "none"},
+               "wc": {"hook": [], "hindi": [], "english": [], "arabic": [], "cta": [], "tags": []},
+               "plat": {"hadith": "-", "quran": "-", "ambience": "-", "bg": "-", "tts": "-", "trans": "-"},
+               "ai_gen": {}, "hadith_tier": "-"}
+
+          def log(step, status="ok", detail=""):
+              icons = {"ok": "✅", "fail": "❌", "warn": "⚠️", "info": "ℹ️", "skip": "⏸️"}
+              line = f"{icons.get(status, '•')} <b>{step}</b>"
+              if detail: line += f" — {detail}"
+              R["steps"].append(line)
+              print(f"[{status.upper()}] {step} — {detail}")
+
+          def log_err(m): R["errors"].append(str(m)[:200]); print(f"[ERR] {m}")
+          def log_warn(m): R["warnings"].append(str(m)[:200]); print(f"[WARN] {m}")
+          def log_enh(m): R["enh"].append(m); print(f"[FEATURE] {m}")
+
+          def load_tools():
+              try:
+                  if TOOLS_STATUS_FILE and os.path.exists(TOOLS_STATUS_FILE):
+                      with open(TOOLS_STATUS_FILE) as f:
+                          R["tools"] = json.load(f).get("tools", {})
+              except Exception: pass
+
+          def sanitize(t):
+              if not t: return ""
+              t = re.sub(r'[\u200b-\u200f\ufeff\u202a-\u202e]', '', str(t))
+              t = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2B00-\u2BFF\uFE00-\uFE0F]', '', t)
+              return t.replace('"', '').replace("'", '').replace('\n', ' ').strip()
+
+          def sanitize_ar(t):
+              if not t: return ""
+              return re.sub(r'[\u200b-\u200e\ufeff\u202a-\u202e]', '', str(t)).replace('\n', ' ').strip()
+
           def run(cmd, timeout=None):
               print(f"[CMD] {cmd[:120]}...")
               subprocess.run(cmd, shell=True, check=True, timeout=timeout)
-          
+
           def dl(url, path, minsize=12000):
               try:
                   r = session.get(url, timeout=35)
                   if r.status_code == 200 and len(r.content) > minsize:
                       with open(path, "wb") as f: f.write(r.content)
                       return True
-              except: pass
+              except Exception: pass
               return False
-          
-          def ck_a(p, m=3000):
-              return os.path.exists(p) and os.path.getsize(p) > m
-          
+
+          def conf_words(section, text):
+              if not text: return
+              for i, w in enumerate(sanitize(text).split(), 1):
+                  R["wc"][section].append(f"✅ {i}. {w}")
+
+          def add_respect_prophet(t):
+              if not t: return t
+              for p, r in [
+                  (r'\b(Prophet|Rasul|Rasool|Messenger of Allah|Nabi)\b(?!\s*ﷺ)', r'\1 ﷺ'),
+                  (r'पैगंबर(?!\s*ﷺ)', 'पैगंबर ﷺ'),
+                  (r'नबी(?!\s*ﷺ)', 'नबी ﷺ'),
+                  (r'रसूल(?!\s*ﷺ)', 'रसूल ﷺ'),
+              ]: t = re.sub(p, r, t)
+              return t
+
+          def add_respect_allah(t):
+              if not t: return t
+              t = re.sub(r'अल्लाह(?!\s*(तआला|SWT|ﷻ))', 'अल्लाह तआला', t)
+              t = re.sub(r'\bAllah\b(?!\s*(SWT|ﷻ|\(SWT\)))', 'Allah (SWT)', t)
+              return t
+
           def hijri():
               try:
                   d = datetime.utcnow()
@@ -290,228 +419,383 @@ jobs:
                             "Ramadan","Shawwal","Dhul Qadah","Dhul Hijjah"]
                   mn = months[hm - 1] if 1 <= hm <= 12 else "?"
                   return f"{hd} {mn} {hy} AH"
-              except: return ""
-          EOF_HELPERS
-          echo "✅ 02 | 🔧 Hathiyaar ready"
+              except Exception: return ""
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 03 | 🧹 SAFAI WALA — src/utils/15_sanitizer.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/utils/15_sanitizer.py << 'EOF_SANITIZER'
-          import re
-          import sys
-          sys.path.insert(0, "src")
-          from config import SAHABA
-          
-          def sanitize(t):
-              if not t: return ""
-              t = re.sub(r'[\u200b-\u200f\ufeff\u202a-\u202e]', '', str(t))
-              t = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2B00-\u2BFF\uFE00-\uFE0F]', '', t)
-              return t.replace('"', '').replace("'", '').replace('\n', ' ').strip()
-          
-          def sanitize_ar(t):
-              if not t: return ""
-              return re.sub(r'[\u200b-\u200e\ufeff\u202a-\u202e]', '', str(t)).replace('\n', ' ').strip()
-          
-          def add_respect_prophet(t):
-              if not t: return t
-              for p, r in [
-                  (r'\b(Prophet|Rasul|Rasool|Messenger of Allah|Nabi)\b(?!\s*ﷺ)', r'\1 ﷺ'),
-                  (r'पैगंबर(?!\s*ﷺ)', 'पैगंबर ﷺ'),
-                  (r'नबी(?!\s*ﷺ)', 'नबी ﷺ'),
-                  (r'रसूल(?!\s*ﷺ)', 'रसूल ﷺ'),
-              ]: t = re.sub(p, r, t)
-              return t
-          
-          def add_respect_allah(t):
-              if not t: return t
-              t = re.sub(r'अल्लाह(?!\s*(तआला|SWT|ﷻ))', 'अल्लाह तआला', t)
-              t = re.sub(r'\bAllah\b(?!\s*(SWT|ﷻ|\(SWT\)))', 'Allah (SWT)', t)
-              return t
-          
-          def add_ra(n):
-              if not n: return n
-              for s in SAHABA:
-                  if s.lower() in n.lower() and "(RA)" not in n:
-                      return f"{n} (RA)"
-              return n
-          EOF_SANITIZER
-          echo "✅ 03 | 🧹 Safai wala ready"
-
-          # ═══════════════════════════════════════════════════════════
-          # FILE 04 | 📝 KHABRI — src/utils/16_logger.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/utils/16_logger.py << 'EOF_LOGGER'
-          import time, sys
-          sys.path.insert(0, "src")
-          from config import TG_TOKEN, TG_CHAT_ID, EVENT_NAME
-          from helpers_import import session
-          
-          RUN_START = time.time()
-          
-          R = {
-              "steps": [], "errors": [], "warnings": [], "hadith": {}, "ai": [],
-              "tts": {}, "audio": [], "trans": {}, "amb": {}, "bg": {}, "logo": {},
-              "video": {}, "drive": {}, "fb": {}, "tools": {}, "enh": [], "aic": {},
-              "es": {"font": False, "words": 0, "dots": 0, "palette": "none", "emoji_path": "-"},
-              "wc": {"hook": [], "hindi": [], "english": [], "arabic": [], "cta": [], "tags": []},
-              "plat": {"hadith": "-", "quran": "-", "ambience": "-", "bg": "-", "tts": "-", "trans": "-"},
-              "ai_gen": {}, "hadith_tier": "-",
-          }
-          
-          def log(step, status="ok", detail=""):
-              icons = {"ok": "✅", "fail": "❌", "warn": "⚠️", "info": "ℹ️", "skip": "⏸️"}
-              line = f"{icons.get(status, '•')} <b>{step}</b>"
-              if detail: line += f" — {detail}"
-              R["steps"].append(line)
-              print(f"[{status.upper()}] {step} — {detail}")
-          
-          def log_err(m): R["errors"].append(str(m)[:200]); print(f"[ERR] {m}")
-          def log_warn(m): R["warnings"].append(str(m)[:200]); print(f"[WARN] {m}")
-          def log_enh(m): R["enh"].append(m); print(f"[FEATURE] {m}")
-          
-          def conf_words(section, text, status="ok"):
-              if not text: return
-              for i, w in enumerate(str(text).split(), 1):
-                  icon = "✅" if status == "ok" else "⚠️"
-                  R["wc"][section].append(f"{icon} {i}. {w}")
-          
-          def conf_list(section, lst):
-              for i, w in enumerate(lst, 1):
-                  R["wc"][section].append(f"✅ {i}. {w}")
-          
-          def _ic(s):
-              s = str(s).lower()
-              return "✅" if ("ok" in s or "success" in s) else "❌" if "fail" in s else "⏸️" if any(k in s for k in ["hold","skip","not set"]) else "⚠️" if "warn" in s else "•"
-          
-          def build_msg(status="COMPLETED", note=""):
-              dur = int(time.time() - RUN_START)
-              L = ["🕌 <b>ISLAMIC HADITH STORY</b>", "━━━━━━━━━━━━━━━"]
-              L.append(f"{'🎉' if status=='COMPLETED' else '⚠️' if status=='PARTIAL' else '❌'} <b>{status}</b>")
-              if note: L.append(f"📝 {note}")
-              L.append(f"⏱️ {dur//60}m {dur%60}s | ⚙️ {EVENT_NAME or 'manual'}")
-              L.append("\n🌐 <b>PLATFORMS</b>")
-              for k, v in R["plat"].items(): L.append(f"  • {k.title()}: <b>{v}</b>")
-              es = R["es"]
-              L.append("\n😊 <b>EMOJI & COLOR</b>")
-              L.append(f"  ✅ Font: {'loaded' if es['font'] else 'dots'}")
-              L.append(f"  ✅ Emojis: {es['words']} | Dots: {es['dots']}")
-              L.append(f"  ✅ Palette: <b>{es['palette']}</b>")
-              if R["aic"]:
-                  L.append("\n🤖 <b>AI CONTENT</b>")
-                  for k in ["hook", "intro", "title", "emotion", "narrator", "outro_cta"]:
-                      if R["aic"].get(k): L.append(f"  ✅ {k}: <b>{R['aic'][k]}</b>")
-              h = R["hadith"]
-              if h: L.append(f"\n📖 <b>{h.get('collection','-')}</b> #{h.get('number','-')}")
-              if R["video"]: L.append(f"\n🎬 <b>VIDEO</b>: {R['video'].get('duration','-')}s")
-              if R["drive"]:
-                  L.append(f"\n☁️ <b>DRIVE</b>: {_ic(R['drive'].get('status',''))}")
-                  if R["drive"].get("link"): L.append(f"  {R['drive']['link']}")
-              if R["fb"]: L.append(f"\n📱 <b>FB</b>: {_ic(R['fb'].get('status',''))}")
-              if R["warnings"]:
-                  L.append("\n⚠️ <b>WARN</b>")
-                  for w in R["warnings"][:5]: L.append(f"  • {w}")
-              if R["errors"]:
-                  L.append("\n❌ <b>ERR</b>")
-                  for e in R["errors"][:5]: L.append(f"  • {e}")
-              m = "\n".join(L)
-              return m[:3950] + "…" if len(m) > 4000 else m
-          
-          def build_wc():
-              L = ["🔍 <b>WORD CONFIRMATION</b>", "━━━━━━━━━━━━━━━", ""]
-              secs = [("hook","🎯 HOOK"),("hindi","📖 HINDI"),("english","📚 ENGLISH"),
-                      ("arabic","🕌 ARABIC"),("cta","📣 CTA"),("tags","🏷️ TAGS")]
-              total = 0
-              for k, lb in secs:
-                  ws = R["wc"].get(k, [])
-                  if not ws: continue
-                  L.append(f"{lb} ({len(ws)})")
-                  for w in ws: L.append(f"  {w}")
-                  L.append(""); total += len(ws)
-              L.append("━━━━━━━━━━━━━━━")
-              L.append(f"✅ <b>Total: {total} words</b>")
-              msgs, cur = [], ""
-              for line in L:
-                  if len(cur) + len(line) + 1 > 3800: msgs.append(cur); cur = line
-                  else: cur += ("\n" if cur else "") + line
-              if cur: msgs.append(cur)
-              return msgs
-          
-          def send_report(status="COMPLETED", note=""):
-              msg = build_msg(status, note)
-              print("=" * 60); print(msg[:2000]); print("=" * 60)
-              if TG_TOKEN and TG_CHAT_ID:
+          def call_ai(prompt, mx=1000, task="gen", jm=True):
+              pv = []
+              if os.environ.get("OPENROUTER_API_KEY"):
+                  pv.append(("OpenRouter", "https://openrouter.ai/api/v1/chat/completions",
+                      {"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}, "openai/gpt-4o-mini"))
+              if os.environ.get("GROQ_API_KEY"):
+                  pv.append(("Groq", "https://api.groq.com/openai/v1/chat/completions",
+                      {"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, "llama-3.3-70b-versatile"))
+              if os.environ.get("GEMINI_API_KEY"):
+                  pv.append(("Gemini", None, None, None))
+              if os.environ.get("CEREBRAS_API_KEY"):
+                  pv.append(("Cerebras", "https://api.cerebras.ai/v1/chat/completions",
+                      {"Authorization": f"Bearer {os.environ['CEREBRAS_API_KEY']}"}, "llama3.1-8b"))
+              if os.environ.get("MISTRAL_API_KEY"):
+                  pv.append(("Mistral", "https://api.mistral.ai/v1/chat/completions",
+                      {"Authorization": f"Bearer {os.environ['MISTRAL_API_KEY']}"}, "mistral-small-latest"))
+              if not pv: return None
+              for name, url, h, model in pv:
                   try:
-                      session.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
-                          json={"chat_id": TG_CHAT_ID, "text": msg, "parse_mode": "HTML",
-                                "disable_web_page_preview": True}, timeout=20)
-                  except Exception as e: print(f"[TG] {e}")
+                      if name == "Gemini":
+                          body = {"contents": [{"parts": [{"text": prompt}]}]}
+                          if jm: body["generationConfig"] = {"responseMimeType": "application/json"}
+                          r = session.post(
+                              f"https://generativelanguage.googleapis.com/v1beta/models/"
+                              f"gemini-1.5-flash:generateContent?key={os.environ['GEMINI_API_KEY']}",
+                              json=body, timeout=60)
+                          if r.status_code == 200:
+                              R["ai"].append({"name": name, "task": task, "status": "ok"})
+                              return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                      else:
+                          pl = {"model": model, "messages": [{"role": "user", "content": prompt}],
+                                "temperature": 0.9, "max_tokens": mx}
+                          if jm: pl["response_format"] = {"type": "json_object"}
+                          r = session.post(url, headers={**h, "Content-Type": "application/json"},
+                              json=pl, timeout=60)
+                          if r.status_code == 200:
+                              R["ai"].append({"name": name, "task": task, "status": "ok"})
+                              return r.json()["choices"][0]["message"]["content"].strip()
+                      R["ai"].append({"name": name, "task": task, "status": f"fail {r.status_code}"})
+                  except Exception as e:
+                      R["ai"].append({"name": name, "task": task, "status": f"fail {str(e)[:30]}"})
+              return None
+
+          def parse_json(t):
+              if not t: return None
+              t = re.sub(r'^```(?:json)?\s*', '', t.strip())
+              t = re.sub(r'\s*```$', '', t.strip())
+              m = re.search(r'\{.*\}', t, re.DOTALL)
+              if not m: return None
+              try: return json.loads(m.group(0))
+              except Exception: return None
+
+          def ai_gen_everything(he, ha=""):
+              pr = f"""You are an Islamic short-video creator.
+          Hadith (EN): "{he}"
+          Hadith (AR): "{ha[:200]}"
+          Return ONLY valid JSON:
+          {{"hook": "Hindi curiosity hook 4-6 words", "intro": "3-5 word Hindi",
+            "title": "2-3 word English title", "category": "One word",
+            "emotion": "calm/khushu/tawbah/shukr/dhikr", "narrator": "English",
+            "quran_ref": "Reference", "quran_arabic": "Arabic verse",
+            "outro_main": "Farewell", "outro_cta": "CTA 3-6 words Hindi",
+            "hashtags": ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"],
+            "color_palette": {{"name": "Creative", "primary": [R,G,B], "secondary": [R,G,B],
+              "text": [R,G,B], "accent": [R,G,B], "glow": [R,G,B]}},
+            "bg_queries": ["3 EMPTY non-animate"], "ambience_query": "nature sound",
+            "engagement_text": "Hindi", "sound_hint_text": "Hindi",
+            "sadaqah_cta": "Hindi", "brand_tagline": "Hindi"}}
+          RULES: NO music, NO people in bg. Hindi Devanagari. RGB 0-255. ONLY JSON."""
+              p = parse_json(call_ai(pr, 1400, "gen", True))
+              if not p: p = {}
+              def sf(k, d=""): return sanitize(p.get(k, "")) or d
+              def st(k, d, mx=100): return val_text(p.get(k, ""), mx) or d
+
+              hk = sf("hook")
+              bad_hooks = ["की अहमियत", "के बारे में", "का हिस्सा", "की बात", "का ज़िक्र"]
+              if not hk or any(bp in hk for bp in bad_hooks) or len(hk.split()) < 4:
+                  hk = random.choice(["क्या आप जानते हैं?", "ये हदीस ज़रूर सुनो।",
+                      "ये बात हर मुसलमान को पता होनी चाहिए।", "इस हदीस को मत भूलना।"])
+              hk = re.sub(r'\?।|।\?', '?', hk)
+              hk = add_respect_prophet(add_respect_allah(hk))
+
+              it = sf("intro"); it = add_respect_prophet(add_respect_allah(it))
+              if it and not it.endswith("।") and not it.endswith("?"): it += "।"
+
+              em = str(p.get("emotion", "")).lower().strip()
+              if em not in ["calm", "khushu", "tawbah", "shukr", "dhikr"]: em = "calm"
+
+              palette = val_palette(p.get("color_palette", {}))
+
+              bg_q = []
+              for q in p.get("bg_queries", [])[:3]:
+                  v = val_bg(q)
+                  if v: bg_q.append(v)
+              if not bg_q: bg_q = random.sample(SAFE_BG_QUERIES, 3)
+
+              amb_q = val_amb(p.get("ambience_query", "")) or "gentle rain nature"
+              eng_txt = st("engagement_text", "याद रखें", 30)
+              snd_txt = st("sound_hint_text", "सुनिए", 20)
+              sda_txt = st("sadaqah_cta", "इस हदीस को शेयर करना सदक़ा जारिया है", 60)
+              brand_t = st("brand_tagline", "दीन की बात", 30)
+
+              cta_raw = sf("outro_cta")
+              bad_cta = ["ज्ञान प्राप्त", "सुनते रहें", "देखते रहें", "पढ़ते रहें"]
+              cta = cta_raw if cta_raw and not any(bp in cta_raw for bp in bad_cta) \
+                    else "इस हदीस को 3 दोस्तों को भेजें।"
+
+              tags = val_tags(p.get("hashtags", []))
+              if not tags: tags = ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
+              for tg in ["#Hadith","#Sunnah","#Islam","#Quran","#DailyHadith","#IslamicReminders"]:
+                  if tg not in tags and len(tags) < 8: tags.append(tg)
+
+              R["ai_gen"] = {"palette_name": palette.get("name","-"), "bg_queries": bg_q,
+                             "ambience": amb_q, "engagement": eng_txt, "sound_hint": snd_txt}
+
+              return {"hook": hk, "intro": it, "title": sf("title"),
+                  "category": sf("category").split()[0] if sf("category") else "",
+                  "emotion": em, "narrator": sf("narrator"), "quran_ref": sf("quran_ref"),
+                  "quran_arabic": sanitize_ar(p.get("quran_arabic","")),
+                  "outro_main": sf("outro_main","Fi Amanillah"), "outro_cta": cta,
+                  "hashtags": tags, "palette": palette, "bg_queries": bg_q,
+                  "ambience_query": amb_q, "engagement_text": eng_txt,
+                  "sound_hint_text": snd_txt, "sadaqah_cta": sda_txt, "brand_tagline": brand_t}
+
+          def deepl(text):
+              k = os.environ.get("DEEPL_API_KEY")
+              if not k: R["trans"]["DeepL"] = "hold"; return None
+              try:
+                  r = session.post("https://api-free.deepl.com/v2/translate",
+                      headers={"Authorization": f"DeepL-Auth-Key {k}"},
+                      data={"text": text, "target_lang": "HI"}, timeout=25)
+                  if r.status_code == 200:
+                      R["trans"]["DeepL"] = "ok"; R["plat"]["trans"] = "DeepL"
+                      return r.json()["translations"][0]["text"]
+              except Exception: pass
+              return None
+
+          def ck_a(p, m=3000): return os.path.exists(p) and os.path.getsize(p) > m
+
+          def tts_edge(text, out):
+              voices = ["hi-IN-MadhurNeural","ur-IN-SalmanNeural",
+                        "ur-PK-AsadNeural","en-IN-PrabhatNeural"]
+              for v in voices:
                   try:
-                      for wc in build_wc():
-                          time.sleep(0.5)
-                          session.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
-                              json={"chat_id": TG_CHAT_ID, "text": wc, "parse_mode": "HTML",
-                                    "disable_web_page_preview": True}, timeout=20)
-                  except Exception as e: print(f"[TG-WC] {e}")
-          EOF_LOGGER
-          echo "✅ 04 | 📝 Khabri ready"
+                      tmp = out + ".txt"
+                      with open(tmp, "w", encoding="utf-8") as f: f.write(text)
+                      if os.path.exists(out): os.remove(out)
+                      cmd = (f'edge-tts --file "{tmp}" --write-media "{out}" '
+                             f'--voice {v} --rate=-10% --pitch=-2Hz')
+                      subprocess.run(cmd, shell=True, check=True, timeout=120)
+                      if os.path.exists(tmp): os.remove(tmp)
+                      if ck_a(out): return True, v
+                  except Exception: continue
+              return False, "edge failed"
 
-          # Simple helper import shim
-          cat > src/helpers_import.py << 'EOF_SHIM'
-          import sys
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          session = _h.session
-          EOF_SHIM
+          def tts_piper(text, out):
+              m = os.path.join(PIPER_DIR, "hi_IN-pratham-medium.onnx")
+              if not os.path.exists(m): return False, "no model"
+              try:
+                  tmp = out + ".wav"
+                  cmd = (f'echo "{text}" | piper --model "{m}" '
+                         f'--output_file "{tmp}" --length_scale 1.08')
+                  subprocess.run(cmd, shell=True, check=True, timeout=90)
+                  if os.path.exists(tmp) and os.path.getsize(tmp) > 5000:
+                      run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
+                      os.remove(tmp)
+                      if ck_a(out): return True, "piper (male)"
+              except Exception: pass
+              return False, "piper failed"
 
-          # ───────────────────────────────────────────────────────────────
-          # __init__.py files (Package markers)
-          # ───────────────────────────────────────────────────────────────
-          touch src/__init__.py
-          touch src/fetchers/__init__.py
-          touch src/ai/__init__.py
-          touch src/voice/__init__.py
-          touch src/video/__init__.py
-          touch src/uploaders/__init__.py
-          touch src/utils/__init__.py
-          echo "✅ __init__.py files ready"
+          def tts_espeak(text, out):
+              try:
+                  tmp = out + ".wav"
+                  cmd = f'espeak-ng -v hi+m3 -s 140 -p 40 -a 180 -w "{tmp}" "{text}"'
+                  subprocess.run(cmd, shell=True, check=True, timeout=60)
+                  if os.path.exists(tmp) and os.path.getsize(tmp) > 3000:
+                      run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
+                      os.remove(tmp)
+                      if ck_a(out): return True, "espeak (male)"
+              except Exception: pass
+              return False, "espeak failed"
 
-          # ───────────────────────────────────────────────────────────────
-          # Show tree
-          # ───────────────────────────────────────────────────────────────
-          echo "🏢 Company structure:"
-          find src -type f -name "*.py" | sort
+          def gen_tts(text, out):
+              text = sanitize(text)
+              if not text: R["tts"] = {"provider":"-","status":"empty"}; return False
+              engines = [("2.edge", tts_edge), ("5.Piper", tts_piper), ("6.espeak", tts_espeak)]
+              for name, fn in engines:
+                  if os.path.exists(out):
+                      try: os.remove(out)
+                      except Exception: pass
+                  try:
+                      ok, detail = fn(text, out)
+                      if ok and ck_a(out):
+                          R["audio"].append({"name": name, "status": "ok", "detail": detail})
+                          R["tts"] = {"provider": name, "voice": detail, "status": "ok"}
+                          R["plat"]["tts"] = name
+                          return True
+                      else:
+                          R["audio"].append({"name": name, "status": "fail", "detail": detail})
+                  except Exception as e:
+                      R["audio"].append({"name": name, "status": "fail", "detail": str(e)[:40]})
+              R["tts"] = {"provider":"-","status":"ALL FAILED"}
+              return False
 
-      # ═══════════════════════════════════════════════════════════════
-      # 10 | 🏭 COMPANY FACTORY — Hadith + AI + Voice
-      # ═══════════════════════════════════════════════════════════════
-      - name: "10|BuildDataDept"
-        run: |
-          # ═══════════════════════════════════════════════════════════
-          # FILE 05 | 🕌 HADITH WALA — src/fetchers/03_hadith.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/fetchers/03_hadith.py << 'EOF_HADITH'
-          import os, json, random, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from config import BOOKS
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          _s = import_module("15_sanitizer")
-          _l = import_module("16_logger")
-          session = _h.session
-          sanitize = _s.sanitize
-          sanitize_ar = _s.sanitize_ar
-          
+          def process_voice(inp, out):
+              filters = ",".join([
+                  "highpass=f=100","lowpass=f=11000",
+                  "equalizer=f=250:width_type=h:width=150:g=2",
+                  "equalizer=f=3000:width_type=h:width=600:g=2",
+                  "equalizer=f=7000:width_type=h:width=1500:g=-3",
+                  "acompressor=threshold=-20dB:ratio=4:attack=5:release=150",
+                  "dynaudnorm=f=200:g=15:p=0.9",
+                  "loudnorm=I=-14:TP=-1.0:LRA=9","volume=1.30",
+              ])
+              run(f'ffmpeg -y -i "{inp}" -af "{filters}" "{out}"')
+              log_enh("Voice Processing")
+
+          PIXABAY_NATURE = [
+              "https://cdn.pixabay.com/download/audio/2022/03/10/audio_d2c1e8c1a5.mp3?filename=rain-ambient-10775.mp3",
+              "https://cdn.pixabay.com/download/audio/2021/09/06/audio_2a4c3b5e0e.mp3?filename=gentle-rain-11212.mp3",
+              "https://cdn.pixabay.com/download/audio/2022/01/18/audio_6e2c8b3a1f.mp3?filename=forest-ambience-11040.mp3",
+          ]
+
+          def get_ambience(query):
+              q = val_amb(query) or "rain nature"
+              fs = os.environ.get("FREESOUND_API_KEY")
+              if fs:
+                  try:
+                      r = session.get("https://freesound.org/apiv2/search/text/",
+                          params={"query": q, "filter": "duration:[25 TO 160] type:mp3",
+                                  "fields": "id,name,previews,tags","page_size": 10,"token": fs},
+                          timeout=14)
+                      if r.status_code == 200 and r.json().get("results"):
+                          res = r.json()["results"]
+                          safe = [s for s in res if not any(
+                              b in str(s.get("tags",[])).lower()
+                              for b in ["music","instrument","piano","guitar","melody","song"])]
+                          s = random.choice(safe or res)
+                          p = (s.get("previews",{}).get("preview-hq-mp3")
+                               or s.get("previews",{}).get("preview-lq-mp3"))
+                          if p and dl(p, "amb_raw.mp3"):
+                              run('ffmpeg -y -i amb_raw.mp3 -af '
+                                  '"volume=0.14,afade=t=in:st=0:d=3,'
+                                  'afade=t=out:st=100:d=10" -t 120 ambience.mp3')
+                              R["amb"] = {"Freesound": "ok"}; R["plat"]["ambience"] = "Freesound"
+                              return
+                  except Exception: pass
+              for u in random.sample(PIXABAY_NATURE, len(PIXABAY_NATURE)):
+                  if dl(u, "amb_raw.mp3"):
+                      run('ffmpeg -y -i amb_raw.mp3 -af '
+                          '"volume=0.14,afade=t=in:st=0:d=3,afade=t=out:st=100:d=10" -t 120 ambience.mp3')
+                      R["amb"] = {"Pixabay": "ok"}; R["plat"]["ambience"] = "Pixabay"
+                      return
+              run('ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo '
+                  '-t 60 -c:a libmp3lame -b:a 128k ambience.mp3')
+              R["amb"] = {"Silent": "ok"}; R["plat"]["ambience"] = "Silent"
+
+          MIXKIT = [
+              "https://assets.mixkit.co/videos/preview/mixkit-night-sky-with-stars-in-time-lapse-1222-large.mp4",
+              "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4",
+              "https://assets.mixkit.co/videos/preview/mixkit-white-clouds-in-the-sky-2407-large.mp4",
+          ]
+
+          def get_bg(queries, dur):
+              DK = "eq=contrast=1.10:brightness=0.02:saturation=1.12,vignette=PI/5"
+              clips = []
+              pk = os.environ.get("PEXELS_API_KEY")
+              if pk:
+                  for q in queries:
+                      try:
+                          r = session.get(
+                              f"https://api.pexels.com/videos/search?query={q}"
+                              f"&orientation=portrait&per_page=6",
+                              headers={"Authorization": pk}, timeout=14)
+                          if r.status_code == 200 and r.json().get("videos"):
+                              v = random.choice(r.json()["videos"])
+                              files = sorted(v.get("video_files",[]),
+                                             key=lambda x: x.get("width",0), reverse=True)
+                              if files and dl(files[0]["link"], f"tmp_{len(clips)}.mp4"):
+                                  clips.append(f"tmp_{len(clips)}.mp4")
+                                  if len(clips) >= 2: break
+                      except Exception: continue
+              if not clips and os.environ.get("PIXABAY_API_KEY"):
+                  px = os.environ["PIXABAY_API_KEY"]
+                  q = queries[0].replace(" ", "+") if queries else "mosque+night"
+                  try:
+                      r = session.get(f"https://pixabay.com/api/videos/?key={px}"
+                          f"&q={q}&orientation=vertical&per_page=8", timeout=14)
+                      if r.status_code == 200 and r.json().get("hits"):
+                          h = random.choice(r.json()["hits"])
+                          u = (h.get("videos",{}).get("large",{}).get("url")
+                               or h.get("videos",{}).get("medium",{}).get("url"))
+                          if u and dl(u, "tmp.mp4"): clips.append("tmp.mp4")
+                  except Exception: pass
+              if not clips:
+                  for i, u in enumerate(random.sample(MIXKIT, len(MIXKIT))):
+                      if dl(u, f"tmp_mix_{i}.mp4"): clips.append(f"tmp_mix_{i}.mp4"); break
+              if not clips:
+                  log_err("BG failed"); send_report("FAILED", "BG failed"); sys.exit(1)
+              if len(clips) >= 2:
+                  d_e = dur / len(clips)
+                  for i, c in enumerate(clips):
+                      run(f'ffmpeg -y -stream_loop -1 -i {c} -vf "'
+                          f'scale=1200:2140:force_original_aspect_ratio=increase,'
+                          f'crop=1080:1920,'
+                          f"zoompan=z='min(zoom+0.0004,1.06)':d=1:"
+                          f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                          f'setsar=1,{DK}" -t {d_e:.2f} -an -c:v libx264 -preset veryfast '
+                          f'-crf 18 bg_{i}.mp4')
+                  with open("bgl.txt","w") as f:
+                      for i in range(len(clips)): f.write(f"file 'bg_{i}.mp4'\n")
+                  run('ffmpeg -y -f concat -safe 0 -i bgl.txt -c copy bg.mp4')
+                  R["bg"] = {"source": "Multi", "status": "ok"}; R["plat"]["bg"] = "Multi-Source"
+              else:
+                  run(f'ffmpeg -y -stream_loop -1 -i {clips[0]} -vf "'
+                      f'scale=1200:2140:force_original_aspect_ratio=increase,'
+                      f'crop=1080:1920,'
+                      f"zoompan=z='min(zoom+0.0004,1.06)':d=1:"
+                      f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                      f'setsar=1,{DK}" -t {dur:.2f} -an -c:v libx264 -preset veryfast '
+                      f'-crf 18 bg.mp4')
+                  R["bg"] = {"source": "Single", "status": "ok"}; R["plat"]["bg"] = "Single"
+              return "bg.mp4"
+
+          def make_logo():
+              for src in ["logo.png","logo.jpg","assets/logo.png","assets/logo.jpg"]:
+                  if os.path.exists(src):
+                      try:
+                          img = Image.open(src).convert("RGBA"); pad = 8
+                          c = Image.new("RGBA",(img.width+pad*2,img.height+pad*2),(0,0,0,0))
+                          c.paste(img,(pad,pad),img)
+                          g = c.filter(ImageFilter.GaussianBlur(6))
+                          gd = g.split(); a = gd[3].point(lambda p: int(p*0.4)); g.putalpha(a)
+                          Image.alpha_composite(g,c).save("avatar.png")
+                          R["logo"] = {"source": src, "status": "ok"}
+                          return True
+                      except Exception: pass
+              return False
+
+          def upload_drive(path, prefix):
+              try:
+                  creds = Credentials(None,
+                      refresh_token=os.environ.get("GOOGLE_DRIVE_REFRESH_TOKEN"),
+                      client_id=os.environ.get("GOOGLE_DRIVE_CLIENT_ID"),
+                      client_secret=os.environ.get("GOOGLE_DRIVE_CLIENT_SECRET"),
+                      token_uri="https://oauth2.googleapis.com/token")
+                  svc = build("drive","v3",credentials=creds,cache_discovery=False)
+                  meta = {"name": f"{prefix}_{int(time.time())}.mp4"}
+                  fid = os.environ.get("DRIVE_STORY_FOLDER_ID")
+                  if fid: meta["parents"] = [fid]
+                  up = svc.files().create(body=meta,
+                      media_body=MediaFileUpload(path,mimetype="video/mp4",resumable=True),
+                      fields="id").execute()
+                  did = up.get("id")
+                  svc.permissions().create(fileId=did,
+                      body={"type":"anyone","role":"reader"}).execute()
+                  link = f"https://drive.google.com/file/d/{did}/view"
+                  R["drive"] = {"status": "ok", "link": link}
+                  return link
+              except Exception as e:
+                  R["drive"] = {"status": f"fail ({str(e)[:80]})"}
+                  log_err(f"Drive: {str(e)[:100]}")
+                  return None
+
           def fetch_hadith():
               bases = ["https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1",
                        "https://raw.githubusercontent.com/fawazahmed0/hadith-api/1"]
+              env_url = os.environ.get("HADITH_API_URL", "").strip()
+              if env_url and "fawazahmed0" in env_url:
+                  bases.insert(0, env_url.rstrip("/"))
               recent = []
               try:
                   if os.path.exists("recent_hadiths.json"):
                       with open("recent_hadiths.json") as f: recent = json.load(f)
-              except: pass
+              except Exception: pass
               for attempt in range(50):
                   book = random.choice(BOOKS)
                   num = random.randint(1, max(1, book["max"] - 50))
@@ -531,458 +815,228 @@ jobs:
                               ar = session.get(f"{base}/editions/{book['ara']}/{num}.json", timeout=10)
                               if ar.status_code == 200:
                                   ad = ar.json().get("hadiths", [])
-                                  if ad: ara = sanitize_ar(ad[0].get("text", ""))
-                          except: pass
+                                  if ad: ara = sanitize(ad[0].get("text",""))
+                          except Exception: pass
                           recent.append(key); recent = recent[-50:]
                           try:
-                              with open("recent_hadiths.json", "w") as f: json.dump(recent, f)
-                          except: pass
-                          _l.R["hadith"] = {
-                              "collection": book["name"],
+                              with open("recent_hadiths.json","w") as f: json.dump(recent, f)
+                          except Exception: pass
+                          R["hadith"] = {"collection": book["name"],
                               "number": str(hs[0].get("hadithnumber") or num),
                               "english": eng, "arabic": ara, "source": "fawazahmed0",
-                              "attempts": attempt + 1, "chars": len(eng),
-                              "grade": book.get("grade", ""),
-                          }
-                          _l.R["hadith_tier"] = "Tier 1 (fawazahmed0)"
-                          _l.R["plat"]["hadith"] = f"fawazahmed0/{book['eng']}"
-                          print(f"[HADITH] {book['name']} #{num}")
-                          return _l.R["hadith"]
-                      except: continue
-              _l.log_warn("Hardcoded fallback")
-              _l.R["hadith"] = {"collection": "Sahih al-Bukhari", "number": "1",
+                              "grade": book.get("grade", "")}
+                          R["hadith_tier"] = "Tier 1 (fawazahmed0)"
+                          R["plat"]["hadith"] = f"fawazahmed0/{book['eng']}"
+                          return R["hadith"]
+                      except Exception: continue
+              R["hadith"] = {"collection": "Sahih al-Bukhari", "number": "1",
                   "english": "The reward of deeds depends upon the intentions.",
                   "arabic": "إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ",
-                  "source": "hardcoded", "attempts": 50, "chars": 60, "grade": "Sahih"}
-              _l.R["hadith_tier"] = "Tier 2 (hardcoded)"
-              return _l.R["hadith"]
-          EOF_HADITH
-          echo "✅ 05 | 🕌 Hadith wala ready"
+                  "source": "hardcoded", "grade": "Sahih"}
+              R["hadith_tier"] = "Tier 2 (hardcoded)"
+              return R["hadith"]
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 06 | 🎬 BG WALA — src/fetchers/04_background.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/fetchers/04_background.py << 'EOF_BG'
-          import os, random, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          _l = import_module("16_logger")
-          session = _h.session
-          dl = _h.dl
-          run = _h.run
-          MIXKIT = [
-              "https://assets.mixkit.co/videos/preview/mixkit-night-sky-with-stars-in-time-lapse-1222-large.mp4",
-              "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4",
-              "https://assets.mixkit.co/videos/preview/mixkit-white-clouds-in-the-sky-2407-large.mp4",
-          ]
-          def get_bg(queries, dur):
-              DK = "eq=contrast=1.10:brightness=0.02:saturation=1.12,vignette=PI/5"
-              clips = []
-              pk = os.environ.get("PEXELS_API_KEY")
-              if pk:
-                  for q in queries:
-                      try:
-                          r = session.get(
-                              f"https://api.pexels.com/videos/search?query={q}&orientation=portrait&per_page=6",
-                              headers={"Authorization": pk}, timeout=14)
-                          if r.status_code == 200 and r.json().get("videos"):
-                              v = random.choice(r.json()["videos"])
-                              files = sorted(v.get("video_files", []),
-                                            key=lambda x: x.get("width", 0), reverse=True)
-                              if files and dl(files[0]["link"], f"tmp_{len(clips)}.mp4"):
-                                  clips.append(f"tmp_{len(clips)}.mp4")
-                                  if len(clips) >= 2: break
-                      except: continue
-              if not clips and os.environ.get("PIXABAY_API_KEY"):
-                  px = os.environ["PIXABAY_API_KEY"]
-                  q = queries[0].replace(" ", "+") if queries else "mosque+night"
-                  try:
-                      r = session.get(f"https://pixabay.com/api/videos/?key={px}&q={q}&orientation=vertical&per_page=8", timeout=14)
-                      if r.status_code == 200 and r.json().get("hits"):
-                          h = random.choice(r.json()["hits"])
-                          u = (h.get("videos", {}).get("large", {}).get("url")
-                               or h.get("videos", {}).get("medium", {}).get("url"))
-                          if u and dl(u, "tmp.mp4"): clips.append("tmp.mp4")
-                  except: pass
-              if not clips:
-                  for i, u in enumerate(random.sample(MIXKIT, len(MIXKIT))):
-                      if dl(u, f"tmp_mix_{i}.mp4"): clips.append(f"tmp_mix_{i}.mp4"); break
-              if not clips:
-                  _l.log_err("BG failed"); return None
-              if len(clips) >= 2:
-                  d_e = dur / len(clips)
-                  for i, c in enumerate(clips):
-                      run(f'ffmpeg -y -stream_loop -1 -i {c} -vf "scale=1200:2140:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z=\'min(zoom+0.0004,1.06)\':d=1:x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':s=1080x1920,setsar=1,{DK}" -t {d_e:.2f} -an -c:v libx264 -preset veryfast -crf 18 bg_{i}.mp4')
-                  with open("bgl.txt", "w") as f:
-                      for i in range(len(clips)): f.write(f"file 'bg_{i}.mp4'\n")
-                  run('ffmpeg -y -f concat -safe 0 -i bgl.txt -c copy bg.mp4')
-                  _l.R["bg"] = {"source": "Multi", "status": "ok"}
-                  _l.R["plat"]["bg"] = "Multi-Source"
-              else:
-                  run(f'ffmpeg -y -stream_loop -1 -i {clips[0]} -vf "scale=1200:2140:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z=\'min(zoom+0.0004,1.06)\':d=1:x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':s=1080x1920,setsar=1,{DK}" -t {dur:.2f} -an -c:v libx264 -preset veryfast -crf 18 bg.mp4')
-                  _l.R["bg"] = {"source": "Single", "status": "ok"}
-                  _l.R["plat"]["bg"] = "Single"
-              return "bg.mp4"
-          EOF_BG
-          echo "✅ 06 | 🎬 BG wala ready"
-
-          # ═══════════════════════════════════════════════════════════
-          # FILE 07 | 🌧️ AMBIENCE WALA — src/fetchers/05_ambience.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/fetchers/05_ambience.py << 'EOF_AMB'
-          import os, random, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          _l = import_module("16_logger")
-          session = _h.session
-          dl = _h.dl
-          run = _h.run
-          PIXABAY_NATURE = [
-              "https://cdn.pixabay.com/download/audio/2022/03/10/audio_d2c1e8c1a5.mp3?filename=rain-ambient-10775.mp3",
-              "https://cdn.pixabay.com/download/audio/2021/09/06/audio_2a4c3b5e0e.mp3?filename=gentle-rain-11212.mp3",
-              "https://cdn.pixabay.com/download/audio/2022/01/18/audio_6e2c8b3a1f.mp3?filename=forest-ambience-11040.mp3",
-          ]
-          def get_ambience(query):
-              q = query or "rain nature"
-              fs = os.environ.get("FREESOUND_API_KEY")
-              if fs:
-                  try:
-                      r = session.get("https://freesound.org/apiv2/search/text/",
-                          params={"query": q, "filter": "duration:[25 TO 160] type:mp3",
-                                  "fields": "id,name,previews,tags", "page_size": 10, "token": fs},
-                          timeout=14)
-                      if r.status_code == 200 and r.json().get("results"):
-                          res = r.json()["results"]
-                          safe = [s for s in res if not any(
-                              b in str(s.get("tags", [])).lower()
-                              for b in ["music", "instrument", "piano", "guitar", "melody", "song"])]
-                          s = random.choice(safe or res)
-                          p = (s.get("previews", {}).get("preview-hq-mp3")
-                               or s.get("previews", {}).get("preview-lq-mp3"))
-                          if p and dl(p, "amb_raw.mp3"):
-                              run('ffmpeg -y -i amb_raw.mp3 -af "volume=0.14,afade=t=in:st=0:d=3,afade=t=out:st=100:d=10" -t 120 ambience.mp3')
-                              _l.R["amb"] = {"Freesound": "ok"}
-                              _l.R["plat"]["ambience"] = "Freesound"
-                              return
-                  except: pass
-              for u in random.sample(PIXABAY_NATURE, len(PIXABAY_NATURE)):
-                  if dl(u, "amb_raw.mp3"):
-                      run('ffmpeg -y -i amb_raw.mp3 -af "volume=0.14,afade=t=in:st=0:d=3,afade=t=out:st=100:d=10" -t 120 ambience.mp3')
-                      _l.R["amb"] = {"Pixabay": "ok"}
-                      _l.R["plat"]["ambience"] = "Pixabay"
-                      return
-              run('ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 60 -c:a libmp3lame -b:a 128k ambience.mp3')
-              _l.R["amb"] = {"Silent": "ok"}
-              _l.R["plat"]["ambience"] = "Silent"
-          EOF_AMB
-          echo "✅ 07 | 🌧️ Ambience wala ready"
-
-      # ═══════════════════════════════════════════════════════════════
-      # 11 | 🏭 COMPANY FACTORY — AI + Voice Department
-      # ═══════════════════════════════════════════════════════════════
-      - name: "11|BuildDimaagVoice"
-        run: |
-          # ═══════════════════════════════════════════════════════════
-          # FILE 08 | 🌍 TARJUMAN — src/ai/06_translator.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/ai/06_translator.py << 'EOF_TR'
-          import os, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          _l = import_module("16_logger")
-          session = _h.session
-          
-          def call_ai(prompt, mx=1000, task="gen", jm=True):
-              pv = []
-              if os.environ.get("OPENROUTER_API_KEY"):
-                  pv.append(("OpenRouter", "https://openrouter.ai/api/v1/chat/completions",
-                      {"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}, "openai/gpt-4o-mini"))
-              if os.environ.get("GROQ_API_KEY"):
-                  pv.append(("Groq", "https://api.groq.com/openai/v1/chat/completions",
-                      {"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, "llama-3.3-70b-versatile"))
-              if os.environ.get("GEMINI_API_KEY"):
-                  pv.append(("Gemini", None, None, None))
-              if os.environ.get("CEREBRAS_API_KEY"):
-                  pv.append(("Cerebras", "https://api.cerebras.ai/v1/chat/completions",
-                      {"Authorization": f"Bearer {os.environ['CEREBRAS_API_KEY']}"}, "llama3.1-8b"))
-              if os.environ.get("MISTRAL_API_KEY"):
-                  pv.append(("Mistral", "https://api.mistral.ai/v1/chat/completions",
-                      {"Authorization": f"Bearer {os.environ['MISTRAL_API_KEY']}"}, "mistral-small-latest"))
-              if os.environ.get("COHERE_API_KEY"):
-                  pv.append(("Cohere", "https://api.cohere.com/v1/chat",
-                      {"Authorization": f"Bearer {os.environ['COHERE_API_KEY']}"}, "command-r-plus"))
-              if not pv: return None
-              for name, url, h, model in pv:
-                  try:
-                      if name == "Gemini":
-                          body = {"contents": [{"parts": [{"text": prompt}]}]}
-                          if jm: body["generationConfig"] = {"responseMimeType": "application/json"}
-                          r = session.post(
-                              f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={os.environ['GEMINI_API_KEY']}",
-                              json=body, timeout=60)
-                          if r.status_code == 200:
-                              _l.R["ai"].append({"name": name, "task": task, "status": "ok"})
-                              return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                      elif name == "Cohere":
-                          r = session.post(url, headers={**h, "Content-Type": "application/json"},
-                              json={"model": model, "message": prompt}, timeout=60)
-                          if r.status_code == 200:
-                              _l.R["ai"].append({"name": name, "task": task, "status": "ok"})
-                              return r.json()["text"].strip()
-                      else:
-                          pl = {"model": model, "messages": [{"role": "user", "content": prompt}],
-                                "temperature": 0.9, "max_tokens": mx}
-                          if jm: pl["response_format"] = {"type": "json_object"}
-                          r = session.post(url, headers={**h, "Content-Type": "application/json"},
-                              json=pl, timeout=60)
-                          if r.status_code == 200:
-                              _l.R["ai"].append({"name": name, "task": task, "status": "ok"})
-                              return r.json()["choices"][0]["message"]["content"].strip()
-                      _l.R["ai"].append({"name": name, "task": task, "status": f"fail {r.status_code}"})
-                  except Exception as e:
-                      _l.R["ai"].append({"name": name, "task": task, "status": f"fail {str(e)[:30]}"})
-              return None
-          
-          def deepl(text):
-              k = os.environ.get("DEEPL_API_KEY")
-              if not k:
-                  _l.R["trans"]["DeepL"] = "hold"
-                  return None
+          # ═══════════════════════════════════════════════════════════════
+          # VERTICAL STACK TEXT — SCREENSHOT JAISA (NO BOX, NO CHAKOR)
+          # ═══════════════════════════════════════════════════════════════
+          def draw_trilingual_vertical(img, hindi_word, arabic_word, english_word,
+                                        palette, fonts, alpha=255):
+              """
+              3 lines stacked vertically on LEFT side — screenshot jaisa.
+              Dot (colored) + Text (white bold with dark shadow).
+              NO box, NO chakor, NO rectangle.
+              """
               try:
-                  r = session.post("https://api-free.deepl.com/v2/translate",
-                      headers={"Authorization": f"DeepL-Auth-Key {k}"},
-                      data={"text": text, "target_lang": "HI"}, timeout=25)
-                  if r.status_code == 200:
-                      _l.R["trans"]["DeepL"] = "ok"
-                      _l.R["plat"]["trans"] = "DeepL"
-                      return r.json()["translations"][0]["text"]
-              except: pass
-              return None
-          
-          def to_hindi(english):
-              _s = import_module("15_sanitizer")
-              hindi = deepl(english) or call_ai(
-                  f"Is English Hadith ka natural Hindi tarjuma likho. Complete.\n\n{english}",
+                  d = ImageDraw.Draw(img)
+
+                  # Position: left side, vertically centered area
+                  x_dot = int(W * 0.08)      # dot x position
+                  x_text = int(W * 0.13)     # text x position (after dot)
+                  base_y = int(H * 0.48)     # middle line y
+                  line_gap = 110              # gap between lines
+
+                  # 3 lines: Hindi (top), Arabic (middle), English (bottom)
+                  lines = [
+                      (hindi_word,   fonts["hi"], base_y - line_gap, 16),
+                      (arabic_word,  fonts["ar"], base_y,             18),
+                      (english_word, fonts["en"], base_y + line_gap, 14),
+                  ]
+
+                  for word, font, y, dot_r in lines:
+                      if not word:
+                          continue
+
+                      color = color_for_word(word)
+
+                      # Colored DOT on left
+                      d.ellipse(
+                          [x_dot - dot_r, y - dot_r, x_dot + dot_r, y + dot_r],
+                          fill=color + (alpha,)
+                      )
+
+                      # TEXT SHADOW (dark outline for readability)
+                      for dx, dy in [(-3,-3),(3,-3),(-3,3),(3,3),(0,-3),(0,3),(-3,0),(3,0)]:
+                          d.text(
+                              (x_text + dx, y + dy),
+                              word,
+                              fill=(0, 0, 0, int(200 * alpha / 255)),
+                              font=font,
+                              anchor="lm"
+                          )
+
+                      # MAIN TEXT (white)
+                      d.text(
+                          (x_text, y),
+                          word,
+                          fill=tuple(palette["text"]) + (alpha,),
+                          font=font,
+                          anchor="lm"
+                      )
+
+                  return img
+              except Exception as e:
+                  print(f"[TRI-VERTICAL] {str(e)[:80]}")
+                  return img
+
+          def islamic_pattern(img, op=0.03):
+              """Very subtle — no visible box"""
+              try:
+                  p = Image.new("RGBA",(W,H),(0,0,0,0)); pd = ImageDraw.Draw(p)
+                  gold = (212,175,55,int(255*op))
+                  for x in range(0,W,160):
+                      for y in range(0,H,160):
+                          s = 20
+                          pd.polygon([(x,y-s),(x+s,y),(x,y+s),(x-s,y)], outline=gold)
+                  return Image.alpha_composite(img,p)
+              except Exception: return img
+
+          def particles(img, fi, cnt, pal):
+              try:
+                  p = Image.new("RGBA",(W,H),(0,0,0,0)); pd = ImageDraw.Draw(p)
+                  random.seed(42)
+                  for i in range(cnt):
+                      px = (random.randint(0,W)+fi*random.choice([1,2,-1,-2]))%W
+                      py = (random.randint(0,H)-fi*random.choice([1,2,3]))%H
+                      sz = random.randint(2,5); a = random.randint(60,160)
+                      c = tuple(pal["primary"]) if i%2==0 else tuple(pal["glow"])
+                      pd.ellipse([px,py,px+sz,py+sz], fill=c+(a,))
+                  return Image.alpha_composite(img,p)
+              except Exception: return img
+
+          def apply_emotion(img, em):
+              try:
+                  oa = img.split()[3]; rgb = img.convert("RGB")
+                  if em == "tawbah":
+                      rgb = ImageEnhance.Color(rgb).enhance(0.88)
+                      rgb = Image.blend(rgb, Image.new("RGB",rgb.size,(0,0,40)), 0.10)
+                  elif em == "shukr":
+                      rgb = ImageEnhance.Color(rgb).enhance(1.10)
+                  elif em == "khushu":
+                      rgb = ImageEnhance.Color(rgb).enhance(0.92)
+                      rgb = Image.blend(rgb, Image.new("RGB",rgb.size,(30,20,40)), 0.08)
+                  r = rgb.convert("RGBA"); r.putalpha(oa); return r
+              except Exception: return img
+
+          def _ic(s):
+              s = str(s).lower()
+              return "✅" if ("ok" in s or "success" in s) else \
+                     "❌" if "fail" in s else \
+                     "⏸️" if any(k in s for k in ["hold","skip","not set"]) else \
+                     "⚠️" if "warn" in s else "•"
+
+          def build_msg(status="COMPLETED", note=""):
+              dur = int(time.time()-RUN_START)
+              L = ["🕌 <b>ISLAMIC HADITH STORY</b>","━━━━━━━━━━━━━━━"]
+              L.append(f"{'🎉' if status=='COMPLETED' else '⚠️' if status=='PARTIAL' else '❌'} <b>{status}</b>")
+              if note: L.append(f"📝 {note}")
+              L.append(f"⏱️ {dur//60}m {dur%60}s | ⚙️ {event_name or 'manual'}")
+              L.append("\n🌐 <b>PLATFORMS</b>")
+              for k, v in R["plat"].items(): L.append(f"  • {k.title()}: <b>{v}</b>")
+              if R["hadith_tier"]: L.append(f"\n📚 <b>TIER</b>: {R['hadith_tier']}")
+              if R["aic"]:
+                  L.append("\n🤖 <b>AI CONTENT</b>")
+                  for k in ["hook","intro","title","emotion","narrator","outro_cta"]:
+                      if R["aic"].get(k): L.append(f"  ✅ {k}: <b>{R['aic'][k]}</b>")
+              h = R["hadith"]
+              if h: L.append(f"\n📖 <b>{h.get('collection','-')}</b> #{h.get('number','-')}")
+              if R["video"]: L.append(f"\n🎬 <b>VIDEO</b>: {R['video'].get('duration','-')}s")
+              if R["drive"]:
+                  L.append(f"\n☁️ <b>DRIVE</b>: {_ic(R['drive'].get('status',''))}")
+                  if R["drive"].get("link"): L.append(f"  {R['drive']['link']}")
+              if R["fb"]: L.append(f"\n📱 <b>FB</b>: {_ic(R['fb'].get('status',''))}")
+              if R["warnings"]:
+                  L.append("\n⚠️ <b>WARN</b>")
+                  for w in R["warnings"][:5]: L.append(f"  • {w}")
+              if R["errors"]:
+                  L.append("\n❌ <b>ERR</b>")
+                  for e in R["errors"][:5]: L.append(f"  • {e}")
+              m = "\n".join(L)
+              return m[:3950]+"…" if len(m) > 4000 else m
+
+          def send_report(status="COMPLETED", note=""):
+              msg = build_msg(status, note)
+              print("="*60); print(msg[:2000]); print("="*60)
+              if TG_TOKEN and TG_CHAT_ID:
+                  try:
+                      session.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
+                          json={"chat_id": TG_CHAT_ID, "text": msg,
+                                "parse_mode": "HTML", "disable_web_page_preview": True},
+                          timeout=20)
+                  except Exception as e: print(f"[TG] {e}")
+
+          def main():
+              print("🕌 Islamic Hadith Story — VERTICAL STACK starting...")
+              load_tools()
+              log("Start", "info", RUN_START_STR)
+
+              h = fetch_hadith()
+              if not h.get("english"):
+                  log("Hadith", "fail"); send_report("FAILED", "Hadith"); sys.exit(1)
+              log("Hadith", "ok", f"{h['collection']} #{h['number']}")
+
+              hindi = deepl(h["english"]) or call_ai(
+                  f"Is English Hadith ka natural Hindi tarjuma likho. Complete.\n\n{h['english']}",
                   task="hindi") or ""
-              hindi = _s.sanitize(hindi)
-              hindi = _s.add_respect_prophet(_s.add_respect_allah(hindi))
-              return hindi
-          EOF_TR
-          echo "✅ 08 | 🌍 Tarjuman ready"
+              hindi = sanitize(re.sub(r"^```.*?```", "", hindi, flags=re.DOTALL))
+              hindi = add_respect_prophet(add_respect_allah(hindi))
+              h["hindi"] = hindi
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 09 | 🧠 DIMAAG WALA — src/ai/07_content.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/ai/07_content.py << 'EOF_CONTENT'
-          import os, re, json, random, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _l = import_module("16_logger")
-          _s = import_module("15_sanitizer")
-          from config import FB_PALETTE, SAFE_BG_QUERIES, MUSIC_BLOCK
-          
-          def _import_tr():
-              sys.path.insert(0, "src/ai")
-              return import_module("06_translator")
-          
-          def parse_json(t):
-              if not t: return None
-              t = re.sub(r'^```(?:json)?\s*', '', t.strip())
-              t = re.sub(r'\s*```$', '', t.strip())
-              m = re.search(r'\{.*\}', t, re.DOTALL)
-              if not m: return None
-              try: return json.loads(m.group(0))
-              except: return None
-          
-          def val_palette(p):
-              if not isinstance(p, dict): return dict(FB_PALETTE)
-              r = {"name": str(p.get("name", "Custom"))[:40]}
-              for k in ["primary", "secondary", "text", "accent", "glow"]:
-                  rgb = p.get(k, FB_PALETTE[k])
-                  if not isinstance(rgb, list) or len(rgb) != 3: return dict(FB_PALETTE)
-                  r[k] = [max(0, min(255, int(v))) for v in rgb]
-              if sum(r["text"]) < 300: r["text"] = [255, 245, 220]
-              return r
-          
-          def val_bg(q):
-              if not q or not isinstance(q, str): return None
-              ql = q.lower()
-              for b in MUSIC_BLOCK: 
-                  if b in ql: return None
-              return q.strip()[:80]
-          
-          def val_amb(q):
-              if not q or not isinstance(q, str): return None
-              ql = q.lower()
-              for b in MUSIC_BLOCK:
-                  if b in ql: return None
-              return q.strip()[:60]
-          
-          def val_tags(tags):
-              if not isinstance(tags, list): return []
-              c = [t for t in tags if isinstance(t, str) and t.startswith("#") and len(t) < 40]
-              return c[:8] if len(c) >= 3 else []
-          
-          def generate_content(he, ha=""):
-              tr = _import_tr()
-              pr = f'''You are an Islamic short-video creator.
-          Hadith (EN): "{he}"
-          Hadith (AR): "{ha[:200]}"
-          Return ONLY valid JSON:
-          {{"hook":"Hindi hook 4-6 words","intro":"3-5 word Hindi","title":"2-3 word English","category":"One word","emotion":"calm/khushu/tawbah/shukr/dhikr","narrator":"Name","quran_ref":"Ref","quran_arabic":"Arabic","outro_main":"Fi Amanillah","outro_cta":"Hindi CTA","hashtags":["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"],"color_palette":{{"name":"Creative","primary":[R,G,B],"secondary":[R,G,B],"text":[R,G,B],"accent":[R,G,B],"glow":[R,G,B]}},"bg_queries":["3 safe queries"],"ambience_query":"nature sound","engagement_text":"Hindi","sound_hint_text":"Hindi","sadaqah_cta":"Hindi","brand_tagline":"Hindi"}}
-          RULES:NO music,NO people.Hindi=Devanagari.RGB 0-255.ONLY JSON.'''
-              p = parse_json(tr.call_ai(pr, 1400, "gen", True)) or {}
-              
-              def sf(k, d=""): return _s.sanitize(p.get(k, "")) or d
-              
-              hk = sf("hook")
-              if not hk or len(hk.split()) < 4:
-                  hk = random.choice(["क्या आप जानते हैं?", "ये हदीस ज़रूर सुनो।",
-                                       "ये बात हर मुसलमान को पता होनी चाहिए।",
-                                       "इस हदीस को मत भूलना।"])
-              hk = _s.add_respect_prophet(_s.add_respect_allah(hk))
-              
-              it = sf("intro")
-              it = _s.add_respect_prophet(_s.add_respect_allah(it))
-              if it and not it.endswith("।") and not it.endswith("?"): it += "।"
-              
-              em = str(p.get("emotion", "")).lower().strip()
-              if em not in ["calm", "khushu", "tawbah", "shukr", "dhikr"]: em = "calm"
-              
-              palette = val_palette(p.get("color_palette", {}))
-              
-              bg_q = []
-              for q in p.get("bg_queries", [])[:3]:
-                  v = val_bg(q)
-                  if v: bg_q.append(v)
-              if not bg_q: bg_q = random.sample(SAFE_BG_QUERIES, 3)
-              
-              cta = sf("outro_cta") or "इस हदीस को 3 दोस्तों को भेजें।"
-              tags = val_tags(p.get("hashtags", [])) or ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
-              
-              _l.R["ai_gen"] = {"palette_name": palette.get("name", "-"), "bg_queries": bg_q}
-              
-              return {
-                  "hook": hk, "intro": it, "title": sf("title"),
-                  "emotion": em, "narrator": sf("narrator"),
-                  "outro_main": sf("outro_main", "Fi Amanillah"),
-                  "outro_cta": cta, "hashtags": tags,
-                  "palette": palette, "bg_queries": bg_q,
-                  "ambience_query": val_amb(p.get("ambience_query", "")) or "gentle rain nature",
-                  "sadaqah_cta": sf("sadaqah_cta", "इस हदीस को शेयर करना सदक़ा जारिया है"),
-              }
-          EOF_CONTENT
-          echo "✅ 09 | 🧠 Dimaag wala ready"
+              aic = ai_gen_everything(h["english"], h.get("arabic", ""))
+              R["aic"] = aic
+              for k in ["hook","intro","title","category","emotion","narrator",
+                        "quran_ref","quran_arabic","outro_main","outro_cta","hashtags"]:
+                  h[k] = aic.get(k, "")
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 10 | 🎙️ AWAAZ WALA — src/voice/08_tts.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/voice/08_tts.py << 'EOF_TTS'
-          import os, subprocess, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _l = import_module("16_logger")
-          _s = import_module("15_sanitizer")
-          _h = import_module("19_helpers")
-          run = _h.run
-          ck_a = _h.ck_a
-          from config import PIPER_DIR
-          from mutagen.mp3 import MP3
-          
-          def tts_edge(text, out):
-              voices = ["hi-IN-MadhurNeural","ur-IN-SalmanNeural","ur-PK-AsadNeural","en-IN-PrabhatNeural"]
-              for v in voices:
-                  try:
-                      tmp = out + ".txt"
-                      with open(tmp, "w", encoding="utf-8") as f: f.write(text)
-                      if os.path.exists(out): os.remove(out)
-                      cmd = f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-10% --pitch=-2Hz'
-                      subprocess.run(cmd, shell=True, check=True, timeout=120)
-                      if os.path.exists(tmp): os.remove(tmp)
-                      if ck_a(out): return True, v
-                  except: continue
-              return False, "edge failed"
-          
-          def tts_piper(text, out):
-              m = os.path.join(PIPER_DIR, "hi_IN-pratham-medium.onnx")
-              if not os.path.exists(m): return False, "no model"
-              try:
-                  tmp = out + ".wav"
-                  cmd = f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.08'
-                  subprocess.run(cmd, shell=True, check=True, timeout=90)
-                  if os.path.exists(tmp) and os.path.getsize(tmp) > 5000:
-                      run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
-                      os.remove(tmp)
-                      if ck_a(out): return True, "piper (male)"
-              except: pass
-              return False, "piper failed"
-          
-          def tts_espeak(text, out):
-              try:
-                  tmp = out + ".wav"
-                  cmd = f'espeak-ng -v hi+m3 -s 140 -p 40 -a 180 -w "{tmp}" "{text}"'
-                  subprocess.run(cmd, shell=True, check=True, timeout=60)
-                  if os.path.exists(tmp) and os.path.getsize(tmp) > 3000:
-                      run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
-                      os.remove(tmp)
-                      if ck_a(out): return True, "espeak (male)"
-              except: pass
-              return False, "espeak failed"
-          
-          def generate_voice(text, out):
-              text = _s.sanitize(text)
-              if not text: return False
-              engines = [("2.edge", tts_edge), ("5.Piper", tts_piper), ("6.espeak", tts_espeak)]
-              for name, fn in engines:
-                  if os.path.exists(out):
-                      try: os.remove(out)
-                      except: pass
-                  try:
-                      ok, detail = fn(text, out)
-                      if ok and ck_a(out):
-                          _l.R["audio"].append({"name": name, "status": "ok", "detail": detail})
-                          _l.R["tts"] = {"provider": name, "voice": detail, "status": "ok"}
-                          _l.R["plat"]["tts"] = name
-                          print(f"[TTS ok] {name} — {detail}")
-                          return True
-                  except: pass
-              _l.R["tts"] = {"provider": "-", "status": "ALL FAILED"}
-              return False
-          
-          def process_voice(inp, out):
-              filters = ",".join([
-                  "highpass=f=100","lowpass=f=11000",
-                  "equalizer=f=250:width_type=h:width=150:g=2",
-                  "equalizer=f=3000:width_type=h:width=600:g=2",
-                  "equalizer=f=7000:width_type=h:width=1500:g=-3",
-                  "acompressor=threshold=-20dB:ratio=4:attack=5:release=150",
-                  "dynaudnorm=f=200:g=15:p=0.9",
-                  "loudnorm=I=-14:TP=-1.0:LRA=9","volume=1.30",
-              ])
-              run(f'ffmpeg -y -i "{inp}" -af "{filters}" "{out}"')
-          EOF_TTS
-          echo "✅ 10 | 🎙️ Awaaz wala ready"
+              palette = aic["palette"]
+              R["es"]["palette"] = palette.get("name", "custom")
+              log("Palette (AI)", "ok", palette.get("name", "-"))
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 11 | 🎚️ MIXER — src/voice/09_audio_mix.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/voice/09_audio_mix.py << 'EOF_MIX'
-          import sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          run = _h.run
-          
-          def mix_audio(voice_mp3, ambience_mp3, out_mp3, vdur):
+              conf_words("hook", h.get("hook", ""))
+              conf_words("hindi", hindi)
+              conf_words("english", h.get("english", ""))
+              conf_words("arabic", h.get("arabic", ""))
+              conf_words("cta", h.get("outro_cta", ""))
+
+              tts_text = f"{h['intro']} {hindi}".strip() or h["english"]
+              if not gen_tts(tts_text, "s_raw.mp3"):
+                  log("TTS", "fail"); send_report("FAILED", "TTS"); sys.exit(1)
+              log("TTS", "ok", R["tts"].get("provider"))
+
+              process_voice("s_raw.mp3", "s_clean.mp3")
+              vdur = MP3("s_clean.mp3").info.length
+              if vdur < VOICE_MIN:
+                  pad = VOICE_MIN - vdur
+                  run(f'ffmpeg -y -i s_clean.mp3 -af "apad=pad_dur={pad:.2f}" s_v.mp3')
+                  vdur = MP3("s_v.mp3").info.length
+              elif vdur > VOICE_MAX:
+                  ex = min(vdur/VOICE_MAX, 1.15)
+                  run(f'ffmpeg -y -i s_clean.mp3 -af "atempo={ex:.4f}" s_v.mp3')
+                  vdur = MP3("s_v.mp3").info.length
+              else:
+                  os.replace("s_clean.mp3", "s_v.mp3")
+              log("Audio", "ok", f"{vdur:.2f}s")
+
+              get_ambience(aic.get("ambience_query", "rain nature"))
               fade = max(vdur - 3.0, 1.0)
               mix = (f"[0:a]volume=1.6,acompressor=threshold=-20dB:ratio=4:attack=5:"
                      f"release=150,dynaudnorm=f=200:g=15:p=0.9,"
@@ -993,685 +1047,263 @@ jobs:
                      f"[a][vs]sidechaincompress=threshold=0.05:ratio=8:attack=10:"
                      f"release=400[ad];"
                      f"[vm][ad]amix=inputs=2:duration=first:normalize=0[o]")
-              run(f'ffmpeg -y -i {voice_mp3} -i {ambience_mp3} -filter_complex "{mix}" '
-                  f'-map "[o]" -c:a libmp3lame -b:a 192k {out_mp3}')
-          EOF_MIX
-          echo "✅ 11 | 🎚️ Mixer ready"
+              run(f'ffmpeg -y -i s_v.mp3 -i ambience.mp3 -filter_complex "{mix}" '
+                  f'-map "[o]" -c:a libmp3lame -b:a 192k s_voice.mp3')
+              log("Mix", "ok")
 
-      # ═══════════════════════════════════════════════════════════════
-      # 12 | 🏭 COMPANY FACTORY — Video Department
-      # ═══════════════════════════════════════════════════════════════
-      - name: "12|BuildVideoDept"
-        run: |
-          # ═══════════════════════════════════════════════════════════
-          # FILE 12 | 😊 EMOJI WALA — src/utils/17_emoji.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/utils/17_emoji.py << 'EOF_EMOJI'
-          import os, glob, sys
-          sys.path.insert(0, "src")
-          from PIL import Image, ImageDraw, ImageFont
-          from config import FONTS_DIR, DEPS_DIR, COLOR_POOL
-          
-          _EC = {}
-          
-          def _hash(s):
-              h = 0
-              for c in str(s): h = (h * 31 + ord(c)) & 0xFFFFFFFF
-              return h
-          
-          def color_for_word(word):
-              return COLOR_POOL[_hash(word) % len(COLOR_POOL)]
-          
-          def get_emoji_font(size=40):
-              if size in _EC: return _EC[size]
-              candidates = []
-              for base in [os.path.expanduser("~/.fonts"), FONTS_DIR,
-                           os.path.join(DEPS_DIR, "fonts"),
-                           "/usr/share/fonts/truetype/noto",
-                           "/usr/share/fonts/truetype/noto-emoji",
-                           "/usr/share/fonts/noto-emoji"]:
-                  if base:
-                      candidates += [os.path.join(base, "NotoEmoji-Regular.ttf"),
-                                     os.path.join(base, "NotoEmoji-Bold.ttf")]
-              try:
-                  for pat in [os.path.expanduser("~/.fonts/*Emoji*.ttf"),
-                              os.path.join(FONTS_DIR, "*Emoji*.ttf") if FONTS_DIR else "",
-                              "/usr/share/fonts/**/*Emoji*.ttf",
-                              "/usr/share/fonts/**/*emoji*.ttf"]:
-                      if pat: candidates += glob.glob(pat, recursive=True)
-              except: pass
-              seen, uniq = set(), []
-              for p in candidates:
-                  if p and p not in seen: seen.add(p); uniq.append(p)
-              for p in uniq:
-                  if not os.path.exists(p): continue
-                  try:
-                      if os.path.getsize(p) < 50000: continue
-                  except: pass
-                  try:
-                      f = ImageFont.truetype(p, size)
-                      t = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
-                      ImageDraw.Draw(t).text((50, 50), "\u2728", fill=(255, 255, 255, 255),
-                                             font=f, anchor="mm")
-                      bb = t.getbbox()
-                      if bb and (bb[2] - bb[0]) > 10:
-                          _EC[size] = (f, True)
-                          return (f, True)
-                  except: pass
-              _EC[size] = (ImageFont.load_default(), False)
-              return (ImageFont.load_default(), False)
-          
-          def emoji_ok():
-              try:
-                  font, loaded = get_emoji_font(60)
-                  if not loaded: return False
-                  ok = 0
-                  for ch in ["\u2728", "\u2764", "\U0001F54C", "\U0001F4D6"]:
-                      t = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
-                      ImageDraw.Draw(t).text((50, 50), ch, fill=(255, 255, 255, 255),
-                                             font=font, anchor="mm")
-                      bb = t.getbbox()
-                      if bb and (bb[2] - bb[0]) > 20 and (bb[3] - bb[1]) > 20: ok += 1
-                  return ok >= 2
-              except: return False
-          
-          EMOJIS = ["\u2728","\u2B50","\u2764","\U0001F31F","\U0001F4AB","\U0001F54C",
-                    "\U0001F4D6","\U0001F64F","\U0001F31E","\U0001F319","\U0001F4A1",
-                    "\U0001F3F5","\U0001F338","\U0001F54B","\U0001F54A","\U0001F4A7",
-                    "\U0001F343","\U0001F31C"]
-          
-          def emoji_for(word, idx):
-              wl = word.lower()
-              kw = {
-                  "अल्लाह": "\U0001F54C", "allah": "\U0001F54C",
-                  "नबी": "\U0001F31F", "prophet": "\U0001F31F",
-                  "हदीस": "\U0001F4D6", "hadith": "\U0001F4D6",
-                  "दुआ": "\U0001F64F", "dua": "\U0001F64F",
-                  "ईमान": "\u2764", "iman": "\u2764",
-                  "जन्नत": "\u2728", "jannah": "\u2728",
-                  "नमाज़": "\U0001F54B", "namaz": "\U0001F54B",
-                  "रोज़ा": "\U0001F319", "roza": "\U0001F319",
-                  "सब्र": "\U0001F54A", "sabr": "\U0001F54A",
-                  "शुक्र": "\U0001F64C", "shukr": "\U0001F64C",
-                  "क़ुरआन": "\U0001F4D6", "quran": "\U0001F4D6",
-              }
-              for k, e in kw.items():
-                  if k in word or k in wl: return e
-              return EMOJIS[idx % len(EMOJIS)]
-          EOF_EMOJI
-          echo "✅ 12 | 😊 Emoji wala ready"
+              bg = get_bg(aic.get("bg_queries", SAFE_BG_QUERIES[:3]),
+                          vdur + INTRO_SEC + OUTRO_SEC)
+              log("BG", "ok", R["bg"].get("source"))
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 13 | 📅 TAREEKH WALA — src/utils/18_hijri.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/utils/18_hijri.py << 'EOF_HIJRI'
-          from datetime import datetime
-          
-          def today():
-              try:
-                  d = datetime.utcnow()
-                  gy, gm, gd = d.year, d.month, d.day
-                  a = (14 - gm) // 12; y = gy + 4800 - a; m = gm + 12 * a - 3
-                  jdn = gd + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
-                  l = jdn - 1948440 + 10632; n = (l - 1) // 10631; l = l - 10631 * n + 354
-                  j = ((10985 - l) // 5316) * ((50 * l) // 17719) + (l // 5670) * ((43 * l) // 15238)
-                  l = l - ((30 - j) // 15) * ((17719 * j) // 50) - (j // 16) * ((15238 * j) // 43) + 29
-                  hm = (24 * l) // 709; hd = l - (709 * hm) // 24; hy = 30 * n + j - 30
-                  months = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani",
-                            "Jumada al-Awwal","Jumada al-Thani","Rajab","Shaban",
-                            "Ramadan","Shawwal","Dhul Qadah","Dhul Hijjah"]
-                  mn = months[hm - 1] if 1 <= hm <= 12 else "?"
-                  return f"{hd} {mn} {hy} AH"
-              except: return ""
-          EOF_HIJRI
-          echo "✅ 13 | 📅 Tareekh wala ready"
+              has_logo = make_logo()
+              log("Logo", "ok" if has_logo else "skip")
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 14 | 🎨 SAJAWATI — src/video/12_decorations.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/video/12_decorations.py << 'EOF_DECOR'
-          import random, sys, math, os
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-          from config import W, H, FONTS_DIR
-          
-          def islamic_pattern(img, op=0.05):
-              try:
-                  p = Image.new("RGBA", (W, H), (0, 0, 0, 0)); pd = ImageDraw.Draw(p)
-                  gold = (212, 175, 55, int(255 * op))
-                  for x in range(0, W, 120):
-                      for y in range(0, H, 120):
-                          s = 30
-                          pd.polygon([(x, y - s), (x + s, y), (x, y + s), (x - s, y)], outline=gold)
-                          pd.polygon([(x - s*0.7, y - s*0.7), (x + s*0.7, y - s*0.7),
-                                      (x + s*0.7, y + s*0.7), (x - s*0.7, y + s*0.7)], outline=gold)
-                  return Image.alpha_composite(img, p)
-              except: return img
-          
-          def particles(img, fi, cnt, pal):
-              try:
-                  p = Image.new("RGBA", (W, H), (0, 0, 0, 0)); pd = ImageDraw.Draw(p)
-                  random.seed(42)
-                  for i in range(cnt):
-                      px = (random.randint(0, W) + fi * random.choice([1, 2, -1, -2])) % W
-                      py = (random.randint(0, H) - fi * random.choice([1, 2, 3])) % H
-                      sz = random.randint(2, 5); a = random.randint(60, 160)
-                      c = tuple(pal["primary"]) if i % 2 == 0 else tuple(pal["glow"])
-                      pd.ellipse([px, py, px + sz, py + sz], fill=c + (a,))
-                  return Image.alpha_composite(img, p)
-              except: return img
-          
-          def border(img, pal):
-              try:
-                  b = Image.new("RGBA", (W, H), (0, 0, 0, 0)); bd = ImageDraw.Draw(b)
-                  bd.rectangle([6, 6, W-6, H-6], outline=tuple(pal["primary"]) + (200,), width=4)
-                  bd.rectangle([14, 14, W-14, H-14], outline=tuple(pal["glow"]) + (80,), width=1)
-                  return Image.alpha_composite(img, b)
-              except: return img
-          
-          def progress_dots(img, prog, pal, cnt=9):
-              try:
-                  l = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ld = ImageDraw.Draw(l)
-                  tw = cnt * 22; sx = (W - tw) // 2; y = H - 42
-                  for i in range(cnt):
-                      cx = sx + i * 22 + 8
-                      if (i / cnt) < prog:
-                          ld.ellipse([cx-7, y-7, cx+7, y+7], fill=tuple(pal["accent"]) + (255,))
-                      else:
-                          ld.ellipse([cx-5, y-5, cx+5, y+5], fill=(80, 65, 40, 160))
-                  return Image.alpha_composite(img, l)
-              except: return img
-          
-          def ref_card(img, coll, num, hj, pal):
-              try:
-                  if not coll and not num: return img
-                  c = Image.new("RGBA", (W, H), (0, 0, 0, 0)); cd = ImageDraw.Draw(c)
-                  try:
-                      fs = ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Bold.ttf"), 22)
-                      fxs = ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Regular.ttf"), 18)
-                  except: fs = fxs = ImageFont.load_default()
-                  cw = 340; ch = 80
-                  cx = W - cw - 30; cy = 30
-                  cd.rounded_rectangle([cx, cy, cx+cw, cy+ch], radius=12,
-                      fill=(15, 10, 5, 220), outline=tuple(pal["primary"]) + (255,), width=2)
-                  cd.text((cx + 15, cy + 12), coll, fill=tuple(pal["glow"]) + (255,), font=fs)
-                  cd.text((cx + 15, cy + 40), f"#{num}", fill=tuple(pal["text"]) + (220,), font=fxs)
-                  if hj: cd.text((cx + 15, cy + 60), hj[:30], fill=tuple(pal["secondary"]) + (220,), font=fxs)
-                  return Image.alpha_composite(img, c)
-              except: return img
-          
-          def title_chip(img, title, pal):
-              try:
-                  if not title: return img
-                  c = Image.new("RGBA", (W, H), (0, 0, 0, 0)); cd = ImageDraw.Draw(c)
-                  try: fnt = ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Bold.ttf"), 26)
-                  except: fnt = ImageFont.load_default()
-                  text = f"* {title}"
-                  bb = cd.textbbox((0, 0), text, font=fnt)
-                  cw = min((bb[2] - bb[0]) + 40, W - 400); ch = 52
-                  cd.rounded_rectangle([30, 30, 30 + cw, 30 + ch], radius=26,
-                      fill=(15, 10, 5, 220), outline=tuple(pal["primary"]) + (255,), width=2)
-                  cd.text((50, 43), text, fill=tuple(pal["glow"]) + (255,), font=fnt)
-                  return Image.alpha_composite(img, c)
-              except: return img
-          
-          def apply_emotion(img, em):
-              try:
-                  oa = img.split()[3]; rgb = img.convert("RGB")
-                  if em == "tawbah":
-                      rgb = ImageEnhance.Color(rgb).enhance(0.88)
-                      rgb = Image.blend(rgb, Image.new("RGB", rgb.size, (0, 0, 40)), 0.10)
-                  elif em == "shukr": rgb = ImageEnhance.Color(rgb).enhance(1.10)
-                  elif em == "khushu":
-                      rgb = ImageEnhance.Color(rgb).enhance(0.92)
-                      rgb = Image.blend(rgb, Image.new("RGB", rgb.size, (30, 20, 40)), 0.08)
-                  r = rgb.convert("RGBA"); r.putalpha(oa); return r
-              except: return img
-          EOF_DECOR
-          echo "✅ 14 | 🎨 Sajawati ready"
+              fonts_dir = os.path.expanduser("~/.fonts")
+              hj = hijri()
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 15 | 🖼️ CHITRAKAAR — src/video/10_frame_renderer.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/video/10_frame_renderer.py << 'EOF_FRAMES'
-          import os, sys, math
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          sys.path.insert(0, "src/video")
-          from importlib import import_module
-          from PIL import Image, ImageDraw, ImageFont, ImageFilter
-          _s = import_module("15_sanitizer")
-          _e = import_module("17_emoji")
-          _hj = import_module("18_hijri")
-          _d = import_module("12_decorations")
-          from config import W, H, FPS, INTRO_SEC, OUTRO_SEC, FONTS_DIR, BRAND_NAME, BRAND_HANDLE, BISMILLAH_ARABIC, AMEEN_ARABIC
-          
-          def reveal(full, el, rate=0.28):
-              ws = _s.sanitize(full).split()
-              if not ws: return ""
-              n = max(0, min(len(ws), int(el / rate) + 1))
-              return " ".join(ws[:n])
-          
-          def draw_tri_line(img, hw, aw, ew, palette, fonts, alpha=255):
-              try:
-                  d = ImageDraw.Draw(img)
-                  cy = int(H * 0.55)
-                  cx = [W * 0.18, W * 0.50, W * 0.82]
-                  items = [(hw, fonts["hi"], cx[0]), (aw, fonts["ar"], cx[1]), (ew, fonts["en"], cx[2])]
-                  for word, font, x in items:
-                      if not word: continue
-                      color = _e.color_for_word(word)
-                      d.ellipse([x - 40 - 12, cy - 12, x - 40 + 12, cy + 12], fill=color + (alpha,))
-                      ef, eok = _e.get_emoji_font(36)
-                      if eok:
-                          ec = _e.emoji_for(word, 0)
-                          try:
-                              t = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
-                              ImageDraw.Draw(t).text((50, 50), ec, fill=(255, 255, 255, 255),
-                                                     font=ef, anchor="mm")
-                              bb = t.getbbox()
-                              if bb and (bb[2] - bb[0]) > 15:
-                                  d.text((x - 40, cy), ec, fill=color + (alpha,), font=ef, anchor="mm")
-                          except: pass
-                      d.text((x, cy), word, fill=tuple(palette["text"]) + (alpha,), font=font, anchor="mm")
-                  return img
-              except: return img
-          
-          def render_frames(hadith, ai_data, hindi, vdur):
-              os.makedirs("story_frames", exist_ok=True)
-              try:
-                  F = {
-                      "big": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Bold.ttf"), 78),
-                      "s": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Bold.ttf"), 48),
-                      "tiny": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Regular.ttf"), 32),
-                      "hook": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSansDevanagari-Bold.ttf"), 82),
-                      "hi": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSansDevanagari-Bold.ttf"), 42),
-                      "ar": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoNaskhArabic-Bold.ttf"), 48),
-                      "en": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoSans-Bold.ttf"), 34),
-                      "bism": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoNaskhArabic-Bold.ttf"), 54),
-                      "ameen": ImageFont.truetype(os.path.join(FONTS_DIR, "NotoNaskhArabic-Bold.ttf"), 68),
-                  }
-              except:
-                  d = ImageFont.load_default()
-                  F = {k: d for k in ["big","s","tiny","hook","hi","ar","en","bism","ameen"]}
-              
               intro, outro = INTRO_SEC, OUTRO_SEC
               total = min(intro + vdur + outro, 65.0)
-              tf = int(total * FPS)
-              palette = ai_data["palette"]
-              hj = _hj.today()
-              
-              hindi_words = _s.sanitize(hindi).split()
-              arabic_words = _s.sanitize_ar(hadith.get("arabic", "")).split()
-              english_words = _s.sanitize(hadith.get("english", "")).split()
-              max_words = max(len(hindi_words), len(arabic_words), len(english_words), 1)
-              word_dur = vdur / max_words
-              
+              os.makedirs("story_frames", exist_ok=True)
+
+              try:
+                  F = {
+                      "big": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 72),
+                      "s": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 46),
+                      "tiny": ImageFont.truetype(f"{fonts_dir}/NotoSans-Regular.ttf", 30),
+                      "hook": ImageFont.truetype(f"{fonts_dir}/NotoSansDevanagari-Bold.ttf", 76),
+                      "hi": ImageFont.truetype(f"{fonts_dir}/NotoSansDevanagari-Bold.ttf", 52),
+                      "ar": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 60),
+                      "en": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 40),
+                      "bism": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 54),
+                      "ameen": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 68),
+                  }
+              except Exception:
+                  d = ImageFont.load_default()
+                  F = {k: d for k in ["big","s","tiny","hook","hi","ar","en","bism","ameen"]}
+
+              lw, lh = 180, 78
+              mx_x, mx_y = W - lw, H - lh
+              fps = FPS
+              tf = int(total * fps)
+              print(f"[FRAMES] {tf}...")
+
+              hindi_words = sanitize(hindi).split()
+              arabic_words = sanitize_ar(h.get("arabic","")).split()
+              english_words = sanitize(h.get("english","")).split()
+              max_words = max(len(hindi_words), len(arabic_words), len(english_words))
+              word_dur = vdur / max(1, max_words)
+
               for fi in range(tf):
-                  t = fi / FPS; prog = fi / tf
+                  t = fi / fps
+                  prog = fi / tf
                   img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                   draw = ImageDraw.Draw(img)
-                  
+
+                  # INTRO
                   if t < intro:
                       mt = t
                       if mt < 0.8:
-                          ba = int(255 * min(1.0, mt / 0.3))
+                          ba = int(255 * min(1.0, mt/0.3))
                           try:
-                              bb = draw.textbbox((0, 0), BISMILLAH_ARABIC, font=F["bism"])
-                              draw.text((W//2 - (bb[2] - bb[0])//2, int(H*0.18)), BISMILLAH_ARABIC,
-                                        fill=tuple(palette["glow"]) + (ba,), font=F["bism"])
-                          except: pass
-                      if ai_data.get("hook"):
-                          partial = reveal(ai_data["hook"], mt - 0.3, 0.25)
+                              bb = draw.textbbox((0,0), BISMILLAH_ARABIC, font=F["bism"])
+                              draw.text((W//2-(bb[2]-bb[0])//2, int(H*0.18)),
+                                        BISMILLAH_ARABIC,
+                                        fill=tuple(palette["glow"])+(ba,), font=F["bism"])
+                          except Exception: pass
+                      if h["hook"]:
+                          partial = " ".join(sanitize(h["hook"]).split()[
+                              :max(0, min(len(sanitize(h["hook"]).split()), int((mt-0.3)/0.25)+1))])
                           if partial:
                               try:
+                                  # Hook shadow
+                                  for dx, dy in [(-3,-3),(3,-3),(-3,3),(3,3)]:
+                                      draw.text((W//2+dx, int(H*0.45)+dy), partial,
+                                                fill=(0,0,0,180), font=F["hook"], anchor="mm")
                                   draw.text((W//2, int(H*0.45)), partial,
-                                            fill=tuple(palette["text"]) + (255,),
+                                            fill=tuple(palette["text"])+(255,),
                                             font=F["hook"], anchor="mm")
-                              except: pass
+                              except Exception: pass
+                      ba = int(220 * min(1.0, mt/0.5))
                       draw.text((W//2, int(H*0.68)), BRAND_NAME,
-                                fill=tuple(palette["primary"]) + (220,), font=F["s"], anchor="mm")
-                  
+                                fill=tuple(palette["primary"])+(ba,), font=F["s"], anchor="mm")
+
+                  # MAIN — VERTICAL STACK
                   elif t < intro + vdur:
                       mt = t - intro
+                      if has_logo:
+                          try:
+                              lg = Image.open("avatar.png").convert("RGBA").resize(
+                                  (lw,lh), Image.Resampling.LANCZOS)
+                              x = abs((int(mt*200)+60)%(2*mx_x)-mx_x)
+                              y = abs((int(mt*150)+120)%(2*mx_y)-mx_y)
+                              img.paste(lg, (x,y), lg)
+                              draw = ImageDraw.Draw(img)
+                          except Exception: pass
+
                       word_idx = int(mt / word_dur)
                       cur_hi = hindi_words[word_idx] if word_idx < len(hindi_words) else ""
                       cur_ar = arabic_words[word_idx] if word_idx < len(arabic_words) else ""
                       cur_en = english_words[word_idx] if word_idx < len(english_words) else ""
+
                       local_t = mt - (word_idx * word_dur)
-                      fa = min(1.0, local_t / 0.3)
+                      fa = min(1.0, local_t / 0.25)
                       alpha_val = int(255 * fa)
-                      img = draw_tri_line(img, cur_hi, cur_ar, cur_en, palette, F, alpha_val)
-                      draw = ImageDraw.Draw(img)
-                  
+
+                      # ═══════════════════════════════════════════════════
+                      # VERTICAL 3-LINE STACK (NO BOX)
+                      # ═══════════════════════════════════════════════════
+                      img = draw_trilingual_vertical(
+                          img, cur_hi, cur_ar, cur_en,
+                          palette, F, alpha=alpha_val
+                      )
+
+                  # OUTRO
                   else:
                       ot = t - (intro + vdur)
-                      if ai_data.get("outro_main"):
+                      if h["outro_main"]:
                           try:
-                              gl = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                              ImageDraw.Draw(gl).text((W//2, int(H*0.34)), ai_data["outro_main"],
-                                  fill=tuple(palette["primary"]) + (100,), font=F["big"], anchor="mm")
+                              gl = Image.new("RGBA",(W,H),(0,0,0,0))
+                              ImageDraw.Draw(gl).text((W//2, int(H*0.34)), h["outro_main"],
+                                  fill=tuple(palette["primary"])+(100,), font=F["big"], anchor="mm")
                               gl = gl.filter(ImageFilter.GaussianBlur(18))
                               img = Image.alpha_composite(img, gl)
                               draw = ImageDraw.Draw(img)
-                              draw.text((W//2, int(H*0.34)), ai_data["outro_main"],
-                                        fill=tuple(palette["text"]) + (255,), font=F["big"], anchor="mm")
-                          except: pass
-                      if ai_data.get("outro_cta"):
+                              draw.text((W//2, int(H*0.34)), h["outro_main"],
+                                        fill=tuple(palette["text"])+(255,),
+                                        font=F["big"], anchor="mm")
+                          except Exception: pass
+                      if h["outro_cta"]:
                           try:
-                              draw.text((W//2, int(H*0.44)), ai_data["outro_cta"],
-                                        fill=tuple(palette["text"]) + (255,), font=F["s"], anchor="mm")
-                          except: pass
-                      draw.text((W//2, int(H*0.52)), BRAND_HANDLE,
-                                fill=tuple(palette["primary"]) + (255,), font=F["tiny"], anchor="mm")
-                      draw.text((W//2, int(H*0.60)), ai_data.get("sadaqah_cta", ""),
-                                fill=tuple(palette["secondary"]) + (240,), font=F["tiny"], anchor="mm")
-                      tags_t = "  ".join(ai_data.get("hashtags", [])[:4])
+                              for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                                  draw.text((W//2+dx, int(H*0.46)+dy), h["outro_cta"],
+                                            fill=(0,0,0,180), font=F["s"], anchor="mm")
+                              draw.text((W//2, int(H*0.46)), h["outro_cta"],
+                                        fill=tuple(palette["text"])+(255,),
+                                        font=F["s"], anchor="mm")
+                          except Exception: pass
+                      draw.text((W//2, int(H*0.56)), BRAND_HANDLE,
+                                fill=tuple(palette["primary"])+(255,), font=F["tiny"], anchor="mm")
+                      draw.text((W//2, int(H*0.64)), aic.get("sadaqah_cta","सदक़ा जारिया है"),
+                                fill=tuple(palette["secondary"])+(240,), font=F["tiny"], anchor="mm")
+                      tags_t = "  ".join(h["hashtags"][:4])
                       if tags_t:
-                          draw.text((W//2, int(H*0.78)), tags_t,
-                                    fill=tuple(palette["secondary"]) + (220,), font=F["tiny"], anchor="mm")
+                          draw.text((W//2, int(H*0.82)), tags_t,
+                                    fill=tuple(palette["secondary"])+(220,),
+                                    font=F["tiny"], anchor="mm")
                       if ot >= outro - 1.2:
-                          aa = int(255 * min(1.0, (ot - (outro - 1.2)) / 0.6))
+                          aa = int(255 * min(1.0, (ot-(outro-1.2))/0.6))
                           try:
-                              bb = draw.textbbox((0, 0), AMEEN_ARABIC, font=F["ameen"])
-                              draw.text((W//2 - (bb[2] - bb[0])//2, int(H*0.90)), AMEEN_ARABIC,
-                                        fill=tuple(palette["glow"]) + (aa,), font=F["ameen"])
-                          except: pass
-                  
-                  img = _d.islamic_pattern(img, 0.05)
-                  if intro <= t < intro + vdur:
-                      cnt = int(20 + 15 * abs(math.sin((t - intro) * 2)))
-                      img = _d.particles(img, fi, cnt, palette)
-                  if t >= intro * 0.5:
-                      img = _d.ref_card(img, hadith["collection"], hadith["number"], hj, palette)
-                  if intro <= t < intro + vdur and ai_data.get("title"):
-                      img = _d.title_chip(img, ai_data["title"], palette)
-                  wp = mt / vdur if intro <= t < intro + vdur else prog
-                  img = _d.progress_dots(img, wp, palette)
-                  img = _d.border(img, palette)
-                  img = _d.apply_emotion(img, ai_data.get("emotion", "calm"))
-                  img.save(f"story_frames/frame_{fi:05d}.png")
-              
-              return tf, total
-          EOF_FRAMES
-          echo "✅ 15 | 🖼️ Chitrakaar ready"
+                              bb = draw.textbbox((0,0), AMEEN_ARABIC, font=F["ameen"])
+                              draw.text((W//2-(bb[2]-bb[0])//2, int(H*0.90)), AMEEN_ARABIC,
+                                        fill=tuple(palette["glow"])+(aa,), font=F["ameen"])
+                          except Exception: pass
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 16 | 🎞️ VIDEO BUILDER — src/video/11_video_builder.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/video/11_video_builder.py << 'EOF_VIDEO'
-          import sys, os
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          run = _h.run
-          from config import FPS
-          
-          def build_video(bg_file, voice_file, total, output="Final_FB_Story.mp4"):
-              run(f'ffmpeg -y -i {bg_file} -framerate {FPS} '
-                  f'-i story_frames/frame_%05d.png -i {voice_file} '
+                  # Subtle pattern (no box)
+                  img = islamic_pattern(img, 0.03)
+
+                  if intro <= t < intro + vdur:
+                      cnt = int(20 + 15*abs(math.sin((t-intro)*2)))
+                      img = particles(img, fi, cnt, palette)
+
+                  img = apply_emotion(img, h["emotion"])
+                  img.save(f"story_frames/frame_{fi:05d}.png")
+
+              log("Frames", "ok", f"{tf}")
+              log_enh("Vertical 3-Line Stack (No Box)")
+
+              final = "Final_FB_Story.mp4"
+              run(f'ffmpeg -y -i {bg} -framerate {fps} '
+                  f'-i story_frames/frame_%05d.png -i s_voice.mp3 '
                   f'-filter_complex "[0:v][1:v]overlay=0:0:shortest=1,'
                   f'eq=contrast=1.08:brightness=0.02:saturation=1.12,'
                   f'vignette=PI/6,format=yuv420p[outv]" '
                   f'-map "[outv]" -map 2:a '
                   f'-c:v libx264 -preset veryfast -crf 17 -b:v 7M '
-                  f'-c:a aac -b:a 192k -t {total:.2f} -movflags +faststart {output}')
-              sz = os.path.getsize(output) / 1024 / 1024
-              return {"file": output, "duration": f"{total:.2f}", "size": f"{sz:.2f}"}
-          EOF_VIDEO
-          echo "✅ 16 | 🎞️ Video builder ready"
+                  f'-c:a aac -b:a 192k -t {total:.2f} -movflags +faststart {final}')
+              sz = os.path.getsize(final)/1024/1024
+              R["video"] = {"file": final, "duration": f"{total:.2f}", "size": f"{sz:.2f}"}
+              log("Video", "ok", f"{total:.2f}s | {sz:.2f}MB")
 
-      # ═══════════════════════════════════════════════════════════════
-      # 13 | 🏭 COMPANY FACTORY — Uploaders
-      # ═══════════════════════════════════════════════════════════════
-      - name: "13|BuildUploaders"
-        run: |
-          # ═══════════════════════════════════════════════════════════
-          # FILE 17 | ☁️ DRIVE WALA — src/uploaders/13_drive.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/uploaders/13_drive.py << 'EOF_DRIVE'
-          import os, time, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _l = import_module("16_logger")
-          from google.oauth2.credentials import Credentials
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-          
-          def upload_drive(path, prefix="Hadith_Story"):
-              try:
-                  creds = Credentials(None,
-                      refresh_token=os.environ.get("GOOGLE_DRIVE_REFRESH_TOKEN"),
-                      client_id=os.environ.get("GOOGLE_DRIVE_CLIENT_ID"),
-                      client_secret=os.environ.get("GOOGLE_DRIVE_CLIENT_SECRET"),
-                      token_uri="https://oauth2.googleapis.com/token")
-                  svc = build("drive", "v3", credentials=creds, cache_discovery=False)
-                  meta = {"name": f"{prefix}_{int(time.time())}.mp4"}
-                  fid = os.environ.get("DRIVE_STORY_FOLDER_ID")
-                  if fid: meta["parents"] = [fid]
-                  up = svc.files().create(body=meta,
-                      media_body=MediaFileUpload(path, mimetype="video/mp4", resumable=True),
-                      fields="id").execute()
-                  did = up.get("id")
-                  svc.permissions().create(fileId=did, body={"type": "anyone", "role": "reader"}).execute()
-                  link = f"https://drive.google.com/file/d/{did}/view"
-                  _l.R["drive"] = {"status": "ok", "link": link}
-                  return link
-              except Exception as e:
-                  _l.R["drive"] = {"status": f"fail ({str(e)[:80]})"}
-                  _l.log_err(f"Drive: {str(e)[:100]}")
-                  return None
-          EOF_DRIVE
-          echo "✅ 17 | ☁️ Drive wala ready"
+              drive_link = upload_drive(final, "Hadith_Story")
+              log("Drive", "ok" if drive_link else "fail", drive_link or "-")
 
-          # ═══════════════════════════════════════════════════════════
-          # FILE 18 | 📱 FACEBOOK WALA — src/uploaders/14_facebook.py
-          # ═══════════════════════════════════════════════════════════
-          cat > src/uploaders/14_facebook.py << 'EOF_FB'
-          import os, sys
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          from importlib import import_module
-          _h = import_module("19_helpers")
-          _l = import_module("16_logger")
-          session = _h.session
-          from config import META_TOKEN, SHOULD_POST_SOCIAL
-          
-          def upload_facebook(video_file):
-              if not META_TOKEN or not SHOULD_POST_SOCIAL:
-                  _l.R["fb"] = {"status": "skipped"}
-                  return
-              pt = META_TOKEN
-              pid = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
-              r = {"page_id": pid or "-", "status": "initiated"}
-              try:
-                  if pid:
-                      pt_resp = session.get(f"https://graph.facebook.com/v21.0/{pid}",
-                          params={"fields": "access_token", "access_token": pt}, timeout=15).json()
-                      page_token_actual = pt_resp.get("access_token", pt)
-                      fs = os.path.getsize(video_file)
-                      s = session.post(f"https://graph.facebook.com/v21.0/{pid}/video_stories",
-                          data={"upload_phase": "start", "file_size": fs,
-                                "access_token": page_token_actual}, timeout=30).json()
-                      if s.get("error"):
-                          r["status"] = f"fail: {s['error'].get('message','')[:80]}"
-                      else:
-                          vid, vurl = s.get("video_id"), s.get("upload_url")
-                          if vid and vurl:
-                              with open(video_file, "rb") as f:
-                                  u = session.post(vurl,
-                                      headers={"Authorization": f"OAuth {page_token_actual}",
-                                               "offset": "0", "file_size": str(fs)},
-                                      data=f.read(), timeout=180)
-                              if u.status_code in (200, 201):
-                                  fin = session.post(f"https://graph.facebook.com/v21.0/{pid}/video_stories",
-                                      data={"upload_phase": "finish", "video_id": vid,
-                                            "access_token": page_token_actual}, timeout=30).json()
-                                  if fin.get("success") or fin.get("post_id"):
-                                      r["status"] = "ok"; r["post_id"] = fin.get("post_id", "-")
-                                  else: r["status"] = "fail (finish)"
-                              else: r["status"] = f"fail (up {u.status_code})"
-                          else: r["status"] = "fail (no video_id)"
-                  else: r["status"] = "fail (no page)"
-              except Exception as e:
-                  r["status"] = f"fail ({str(e)[:60]})"
-              _l.R["fb"] = r
-          EOF_FB
-          echo "✅ 18 | 📱 Facebook wala ready"
-
-      # ═══════════════════════════════════════════════════════════════
-      # 14 | 🏭 COMPANY FACTORY — The MANAGER (main.py)
-      # ═══════════════════════════════════════════════════════════════
-      - name: "14|BuildManager"
-        run: |
-          cat > src/01_main.py << 'EOF_MAIN'
-          import os, sys, time, traceback
-          sys.path.insert(0, "src")
-          sys.path.insert(0, "src/utils")
-          sys.path.insert(0, "src/fetchers")
-          sys.path.insert(0, "src/ai")
-          sys.path.insert(0, "src/voice")
-          sys.path.insert(0, "src/video")
-          sys.path.insert(0, "src/uploaders")
-          from importlib import import_module
-          from mutagen.mp3 import MP3
-          
-          def main():
-              print("🏢 SAWAJ STUDIO — Company start!")
-              
-              # Load all departments
-              _l = import_module("16_logger")
-              _h = import_module("19_helpers")
-              hadith_mod = import_module("03_hadith")
-              bg_mod = import_module("04_background")
-              amb_mod = import_module("05_ambience")
-              tr_mod = import_module("06_translator")
-              content_mod = import_module("07_content")
-              tts_mod = import_module("08_tts")
-              mix_mod = import_module("09_audio_mix")
-              frames_mod = import_module("10_frame_renderer")
-              video_mod = import_module("11_video_builder")
-              drive_mod = import_module("13_drive")
-              fb_mod = import_module("14_facebook")
-              
-              from config import VOICE_MIN, VOICE_MAX, INTRO_SEC, OUTRO_SEC
-              
-              _l.log("Start", "info")
-              
-              # STEP 1: Hadith
-              hadith = hadith_mod.fetch_hadith()
-              if not hadith.get("english"):
-                  _l.log("Hadith", "fail"); _l.send_report("FAILED", "Hadith"); sys.exit(1)
-              _l.log("Hadith", "ok", f"{hadith['collection']} #{hadith['number']}")
-              
-              # STEP 2: Hindi translate
-              hindi = tr_mod.to_hindi(hadith["english"])
-              _l.R["aic"] = _l.R.get("aic", {})
-              hadith["hindi"] = hindi
-              _l.log("Translate", "ok", f"{len(hindi)} chars")
-              
-              # STEP 3: AI content
-              ai_data = content_mod.generate_content(hadith["english"], hadith.get("arabic", ""))
-              _l.R["aic"] = ai_data
-              _l.log("AI Content", "ok", ai_data.get("title", "-"))
-              
-              # STEP 4: TTS
-              tts_text = f"{ai_data.get('intro','')} {hindi}".strip() or hadith["english"]
-              if not tts_mod.generate_voice(tts_text, "s_raw.mp3"):
-                  _l.log("TTS", "fail"); _l.send_report("FAILED", "TTS"); sys.exit(1)
-              _l.log("TTS", "ok", _l.R["tts"].get("provider"))
-              
-              # STEP 5: Process voice
-              tts_mod.process_voice("s_raw.mp3", "s_clean.mp3")
-              vdur = MP3("s_clean.mp3").info.length
-              if vdur < VOICE_MIN:
-                  pad = VOICE_MIN - vdur
-                  _h.run(f'ffmpeg -y -i s_clean.mp3 -af "apad=pad_dur={pad:.2f}" s_v.mp3')
-                  vdur = MP3("s_v.mp3").info.length
-              elif vdur > VOICE_MAX:
-                  ex = min(vdur / VOICE_MAX, 1.15)
-                  _h.run(f'ffmpeg -y -i s_clean.mp3 -af "atempo={ex:.4f}" s_v.mp3')
-                  vdur = MP3("s_v.mp3").info.length
+              if META_TOKEN and should_post_social:
+                  pt = META_TOKEN
+                  pid = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
+                  r = {"page_id": pid or "-", "status": "initiated"}
+                  try:
+                      if pid:
+                          pt_resp = session.get(f"https://graph.facebook.com/v21.0/{pid}",
+                              params={"fields": "access_token", "access_token": pt},
+                              timeout=15).json()
+                          page_token_actual = pt_resp.get("access_token", pt)
+                          fs = os.path.getsize(final)
+                          s = session.post(
+                              f"https://graph.facebook.com/v21.0/{pid}/video_stories",
+                              data={"upload_phase": "start", "file_size": fs,
+                                    "access_token": page_token_actual},
+                              timeout=30).json()
+                          if s.get("error"):
+                              r["status"] = f"fail: {s['error'].get('message','')[:80]}"
+                          else:
+                              vid, vurl = s.get("video_id"), s.get("upload_url")
+                              if vid and vurl:
+                                  with open(final, "rb") as f:
+                                      u = session.post(vurl,
+                                          headers={"Authorization": f"OAuth {page_token_actual}",
+                                                   "offset": "0", "file_size": str(fs)},
+                                          data=f.read(), timeout=180)
+                                  if u.status_code in (200, 201):
+                                      fin = session.post(
+                                          f"https://graph.facebook.com/v21.0/{pid}/video_stories",
+                                          data={"upload_phase": "finish", "video_id": vid,
+                                                "access_token": page_token_actual},
+                                          timeout=30).json()
+                                      if fin.get("success") or fin.get("post_id"):
+                                          r["status"] = "ok"; r["post_id"] = fin.get("post_id","-")
+                                      else: r["status"] = "fail (finish)"
+                                  else: r["status"] = f"fail (up {u.status_code})"
+                              else: r["status"] = "fail (no video_id)"
+                      else: r["status"] = "fail (no page)"
+                  except Exception as e: r["status"] = f"fail ({str(e)[:60]})"
+                  R["fb"] = r
+                  log("FB Story", "ok" if r["status"]=="ok" else "fail", r["status"])
               else:
-                  os.replace("s_clean.mp3", "s_v.mp3")
-              _l.log("Audio", "ok", f"{vdur:.2f}s")
-              
-              # STEP 6: Ambience + Mix
-              amb_mod.get_ambience(ai_data.get("ambience_query", "rain nature"))
-              mix_mod.mix_audio("s_v.mp3", "ambience.mp3", "s_voice.mp3", vdur)
-              _l.log("Mix", "ok")
-              
-              # STEP 7: Background
-              bg = bg_mod.get_bg(ai_data.get("bg_queries"), vdur + INTRO_SEC + OUTRO_SEC)
-              if not bg:
-                  _l.log("BG", "fail"); _l.send_report("FAILED", "BG"); sys.exit(1)
-              _l.log("BG", "ok", _l.R["bg"].get("source"))
-              
-              # STEP 8: Frames
-              tf, total = frames_mod.render_frames(hadith, ai_data, hindi, vdur)
-              _l.log("Frames", "ok", f"{tf} frames")
-              
-              # STEP 9: Video
-              _l.R["video"] = video_mod.build_video(bg, "s_voice.mp3", total)
-              _l.log("Video", "ok", f"{total:.2f}s | {_l.R['video']['size']}MB")
-              
-              # STEP 10: Upload
-              drive_link = drive_mod.upload_drive("Final_FB_Story.mp4")
-              _l.log("Drive", "ok" if drive_link else "fail", drive_link or "-")
-              
-              fb_mod.upload_facebook("Final_FB_Story.mp4")
-              _l.log("Facebook", "ok" if _l.R["fb"].get("status") == "ok" else "skip",
-                     _l.R["fb"].get("status", "-"))
-              
-              # Cleanup
-              for f in ["s_raw.mp3", "s_clean.mp3", "s_v.mp3", "s_voice.mp3",
-                        "amb_raw.mp3", "bgl.txt"]:
+                  R["fb"] = {"status": "skipped"}; log("FB","skip","manual")
+
+              for f in ["s_raw.mp3","s_clean.mp3","s_v.mp3","s_voice.mp3",
+                        "amb_raw.mp3","bgl.txt"]:
                   if os.path.exists(f):
                       try: os.remove(f)
-                      except: pass
-              import shutil
+                      except Exception: pass
+              for i in range(5):
+                  for f in [f"tmp_{i}.mp4", f"bg_{i}.mp4", f"tmp_mix_{i}.mp4"]:
+                      if os.path.exists(f):
+                          try: os.remove(f)
+                          except Exception: pass
               shutil.rmtree("story_frames", ignore_errors=True)
-              _l.log("Cleanup", "ok")
-              
-              _l.send_report("COMPLETED")
-              print("🏢 Alhamdulillah! Company band.")
-          
+              log("Cleanup", "ok")
+
+              status = "COMPLETED" if not R["errors"] else "PARTIAL"
+              send_report(status)
+              print("🕌 Alhamdulillah. Done.")
+
           if __name__ == "__main__":
-              try: main()
-              except SystemExit: raise
+              try:
+                  main()
+              except SystemExit:
+                  raise
               except Exception as e:
                   print(traceback.format_exc())
-                  import importlib
-                  _l = import_module("16_logger")
-                  _l.log_err(f"Fatal: {str(e)[:150]}")
-                  try: _l.send_report("FAILED", f"Uncaught: {str(e)[:120]}")
-                  except: pass
+                  log_err(f"Fatal: {str(e)[:150]}")
+                  try: send_report("FAILED", f"Uncaught: {str(e)[:120]}")
+                  except Exception: pass
                   sys.exit(1)
-          EOF_MAIN
-          echo "✅ 19 | 🧑‍💼 Manager ready"
+          PYEOF
+          echo "✅ Python script created"
+          wc -l scripts/story_video.py
 
-      # ═══════════════════════════════════════════════════════════════
-      # 15 | 🏭 SHOW COMPANY STRUCTURE
-      # ═══════════════════════════════════════════════════════════════
-      - name: "15|ShowTree"
-        run: |
-          echo "🏢 COMPANY STRUCTURE:"
-          echo "════════════════════════════════════════════════════════════"
-          find src -type f -name "*.py" | sort
-          echo "════════════════════════════════════════════════════════════"
-          echo "📁 Assets:"
-          ls -la assets/ 2>/dev/null || echo "(empty)"
-          echo "════════════════════════════════════════════════════════════"
-          echo "Total files:"
-          find src -type f -name "*.py" | wc -l
-
-      # ═══════════════════════════════════════════════════════════════
-      # 16 | 🏭 RUN THE COMPANY
-      # ═══════════════════════════════════════════════════════════════
-      - name: "16|RunCompany"
+      - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -1684,36 +1316,32 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: '${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}'
+          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
           DEPS_DIR: ${{ env.DEPS_DIR }}
           PIPER_DIR: ${{ env.DEPS_DIR }}/piper
-        run: python3 src/01_main.py
+          TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
+        run: python3 "scripts/story_video.py"
 
-      # ═══════════════════════════════════════════════════════════════
-      # 17 | 📦 ARTIFACT
-      # ═══════════════════════════════════════════════════════════════
-      - name: "17|Artifact"
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: fb-story-video
           path: Final_FB_Story.mp4
           retention-days: 5
           if-no-files-found: ignore
 
-      # ═══════════════════════════════════════════════════════════════
-      # 18 | 🧹 CLEANUP
-      # ═══════════════════════════════════════════════════════════════
-      - name: "18|Cleanup"
+      - name: 📊 Cache Status
         if: always()
         run: |
-          rm -f Final_FB_Story.mp4
-          echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
