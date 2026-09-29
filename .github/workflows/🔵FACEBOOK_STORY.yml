@@ -27,13 +27,10 @@ jobs:
     env:
       CACHE_VERSION: v16
       DEPS_DIR: ${{ github.workspace }}/.dependencies
-      PYTHON_VERSION: '3.11'
 
     steps:
       - name: Checkout Public Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Restore Master Dependencies Cache
         id: master-cache
@@ -41,119 +38,111 @@ jobs:
         with:
           path: |
             .dependencies
-            \~/.cache/pip
-            \~/.local/share/piper
-          key: \( {{ runner.os }}-fb-story-master- \){{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+            ~/.cache/pip
+            ~/.local/share/piper
+          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
           restore-keys: |
-            \( {{ runner.os }}-fb-story-master- \){{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
       - name: Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs,tmp}
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
-          echo "TMPDIR=$DEPS_DIR/tmp" >> $GITHUB_ENV
 
       - name: Fetch Code from Private Repository
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
-          set -euo pipefail
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
-          if [ -z "${TOKEN_GITHUB:-}" ]; then
-            echo "TOKEN_GITHUB missing"
+
+          if [ -z "$TOKEN_GITHUB" ]; then
+            echo "TOKEN_GITHUB is empty — check GitHub Secrets"
             exit 1
           fi
-          rm -rf temp_private_repo
-          git clone --depth 1 --single-branch https://x-access-token:\( {TOKEN_GITHUB}@github.com/ \){PRIVATE_REPO}.git temp_private_repo
+          echo "Token length: ${#TOKEN_GITHUB}"
+
+          git clone --depth 1 \
+            "https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git" \
+            temp_private_repo
+
+          if [ ! -d "temp_private_repo" ]; then
+            echo "Clone failed"
+            exit 1
+          fi
+
           mkdir -p "Social media/Facebook"
-          if [ ! -f "temp_private_repo/Social media/Facebook/Story_video.py" ]; then
-            echo "Story_video.py not found in private repo"
-            ls -la temp_private_repo/ || true
+          cp "temp_private_repo/Social media/Facebook/Story_video.py" \
+             "Social media/Facebook/Story_video.py"
+
+          if [ -f "Social media/Facebook/Story_video.py" ]; then
+            LINES=$(wc -l < "Social media/Facebook/Story_video.py")
+            echo "Script copied — $LINES lines"
+          else
+            echo "Script copy failed"
             exit 1
           fi
-          cp "temp_private_repo/Social media/Facebook/Story_video.py" "Social media/Facebook/Story_video.py"
-          chmod +x "Social media/Facebook/Story_video.py" || true
+
           rm -rf temp_private_repo
-          ls -la "Social media/Facebook/"
+          echo "Cleanup done"
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          python-version: '3.11'
 
       - name: FFmpeg + System Fonts Cache-Aware
         run: |
-          set -euo pipefail
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           LIB_DIR="$DEPS_DIR/libs"
-          BIN_DIR="$DEPS_DIR/bin"
 
-          install_fresh() {
-            echo "Fresh install of ffmpeg sox espeak-ng fonts"
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-              ffmpeg sox espeak-ng libsox-fmt-all \
-              fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core \
-              fonts-noto-color-emoji fonts-dejavu-core fontconfig \
-              libavcodec-extra libavformat-dev libswscale-dev
-            sudo ldconfig
-          }
-
-          restore_from_cache() {
-            echo "Restoring FFmpeg + SoX from cache"
+          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
+            echo "FFmpeg + SoX CACHED - restoring"
             if [ -d "$LIB_DIR" ]; then
               sudo mkdir -p /usr/lib/x86_64-linux-gnu
               sudo cp -n "$LIB_DIR"/*.so* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
               sudo ldconfig
             fi
             sudo mkdir -p /usr/local/bin
-            for b in ffmpeg ffprobe sox espeak-ng; do
-              if [ -f "$BIN_DIR/$b" ]; then
-                sudo cp "$BIN_DIR/$b" /usr/local/bin/$b
-                sudo chmod +x /usr/local/bin/$b
-              fi
-            done
+            sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg 2>/dev/null || true
+            sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe 2>/dev/null || true
+            sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox 2>/dev/null || true
+            sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox 2>/dev/null || true
+            [ -f "$DEPS_DIR/bin/espeak-ng" ] && sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng && sudo chmod +x /usr/local/bin/espeak-ng || true
             if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
               sudo mkdir -p /usr/share/fonts/truetype
               sudo cp -rn "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
-              sudo fc-cache -f >/dev/null 2>&1 || true
+              sudo fc-cache -f > /dev/null 2>&1 || true
             fi
-          }
-
-          if [ -f "$MARKER" ] && [ -f "$BIN_DIR/ffmpeg" ] && [ -f "$BIN_DIR/sox" ]; then
-            restore_from_cache
             if ffmpeg -version >/dev/null 2>&1 && sox --version >/dev/null 2>&1; then
               echo "Cache verified"
             else
               echo "Cache broken - reinstalling"
               rm -f "$MARKER"
-              install_fresh
+              sudo apt-get update -q
+              sudo apt-get install -y -q --reinstall ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+              sudo ldconfig
             fi
           else
-            install_fresh
+            echo "Fresh install of FFmpeg + SoX + espeak-ng"
+            sudo apt-get update -q
+            sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
+            sudo ldconfig
           fi
 
-          mkdir -p "$BIN_DIR" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
-          for b in ffmpeg ffprobe sox espeak-ng; do
-            if command -v $b >/dev/null 2>&1; then
-              cp "$(which $b)" "$BIN_DIR/$b" 2>/dev/null || true
-            fi
-          done
+          mkdir -p "$DEPS_DIR/bin" "$LIB_DIR" "$DEPS_DIR/system-fonts/truetype"
+          cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg" 2>/dev/null || true
+          cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe" 2>/dev/null || true
+          cp "$(which sox)" "$DEPS_DIR/bin/sox" 2>/dev/null || true
+          cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" 2>/dev/null || true
 
           for bin in ffmpeg ffprobe sox; do
-            if command -v $bin >/dev/null 2>&1; then
-              ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read -r lib; do
-                [ -f "$lib" ] && cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
-              done
-            fi
+            LDD=$(ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}')
+            for lib in $LDD; do
+              [ -f "$lib" ] && cp -n "$lib" "$LIB_DIR/" 2>/dev/null || true
+            done
           done
-          for libglob in /usr/lib/x86_64-linux-gnu/libav*.so* \
-                          /usr/lib/x86_64-linux-gnu/libsw*.so* \
-                          /usr/lib/x86_64-linux-gnu/libpostproc*.so* \
-                          /usr/lib/x86_64-linux-gnu/libsox*.so* \
-                          /usr/lib/x86_64-linux-gnu/libespeak*.so*; do
+          for libglob in /usr/lib/x86_64-linux-gnu/libav*.so* /usr/lib/x86_64-linux-gnu/libsw*.so* /usr/lib/x86_64-linux-gnu/libpostproc*.so* /usr/lib/x86_64-linux-gnu/libsox*.so*; do
             [ -f "$libglob" ] && cp -n "$libglob" "$LIB_DIR/" 2>/dev/null || true
           done
 
@@ -161,47 +150,30 @@ jobs:
           touch "$MARKER"
           ffmpeg -version 2>&1 | head -1
           sox --version 2>&1 | head -1
-          espeak-ng --version 2>&1 | head -1 || true
+          echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
       - name: Custom Fonts Cache-Aware
         run: |
-          set -euo pipefail
           FORCE_DOWNLOAD=0
-          FONTS_DIR="$DEPS_DIR/fonts"
-          mkdir -p "$FONTS_DIR"
+          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoEmoji-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" ] && FORCE_DOWNLOAD=1
+          [ ! -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" ] && FORCE_DOWNLOAD=1
 
-          REQUIRED_FONTS=(
-            "NotoEmoji-Regular.ttf"
-            "NotoSansDevanagari-Bold.ttf"
-            "NotoNaskhArabic-Bold.ttf"
-            "NotoSans-Bold.ttf"
-            "NotoSans-Regular.ttf"
-            "NotoSansDevanagari-Regular.ttf"
-            "NotoNaskhArabic-Regular.ttf"
-            "NotoEmoji-Bold.ttf"
-            "NotoColorEmoji.ttf"
-          )
-
-          for f in "${REQUIRED_FONTS[@]}"; do
-            if [ ! -f "$FONTS_DIR/$f" ]; then
-              FORCE_DOWNLOAD=1
-              break
-            fi
-          done
-
-          if [ -f "$FONTS_DIR/NotoSansDevanagari-Bold.ttf" ]; then
-            SZ=$(stat -c%s "$FONTS_DIR/NotoSansDevanagari-Bold.ttf" 2>/dev/null || echo 0)
-            if [ "$SZ" -lt 50000 ]; then
+          if [ -f "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" ]; then
+            SZ=$(stat -c%s "$DEPS_DIR/fonts/NotoEmoji-Regular.ttf" 2>/dev/null || echo 0)
+            if [ "$SZ" -lt 100000 ]; then
+              echo "NotoEmoji-Regular.ttf too small - forcing re-download"
               FORCE_DOWNLOAD=1
             fi
           fi
 
-          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "\( DEPS_DIR/.fonts_ok" ] && [ " \)(ls -A $FONTS_DIR 2>/dev/null | wc -l)" -ge 9 ]; then
+          if [ $FORCE_DOWNLOAD -eq 0 ] && [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 9 ]; then
             echo "Custom fonts CACHED"
           else
             echo "Downloading fonts"
-            rm -rf "$FONTS_DIR"
-            mkdir -p "$FONTS_DIR"
+            rm -rf "$DEPS_DIR/fonts"
+            mkdir -p "$DEPS_DIR/fonts"
 
             declare -A FONTS=(
               ["NotoSans-Regular.ttf"]="https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
@@ -217,24 +189,21 @@ jobs:
 
             for name in "${!FONTS[@]}"; do
               echo "Downloading $name"
-              for attempt in 1 2 3; do
-                if wget -q --timeout=90 --tries=2 "${FONTS[$name]}" -O "$FONTS_DIR/$name"; then
-                  break
-                fi
-                sleep 2
-              done
+              wget -q --timeout=60 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
 
-            ls -la "$FONTS_DIR/"
+            echo "Downloaded files"
+            ls -la "$DEPS_DIR/fonts/"
 
-            for font in "$FONTS_DIR/"*.ttf; do
+            echo "FONT VERIFICATION"
+            for font in "$DEPS_DIR/fonts/"*.ttf; do
               if [ -f "$font" ]; then
-                MAGIC=$(xxd -p -l 4 "$font" 2>/dev/null | tr 'a-f' 'A-F' || echo "")
-                SZ=$(stat -c%s "$font" 2>/dev/null || echo 0)
-                if [[ "$MAGIC" == "00010000" || "$MAGIC" == "74727565" || "$MAGIC" == "4F54544F" ]] && [ "$SZ" -gt 1000 ]; then
+                MAGIC=$(xxd -p -l 4 "$font" 2>/dev/null | tr 'a-f' 'A-F')
+                SZ=$(stat -c%s "$font")
+                if [[ "$MAGIC" == "00010000" || "$MAGIC" == "74727565" || "$MAGIC" == "4F54544F" ]]; then
                   echo "VALID: $(basename $font) - $SZ bytes"
                 else
-                  echo "CORRUPT: $(basename $font) - $SZ bytes"
+                  echo "CORRUPT: $(basename $font) - deleting"
                   rm -f "$font"
                 fi
               fi
@@ -243,102 +212,69 @@ jobs:
             touch "$DEPS_DIR/.fonts_ok"
           fi
 
-          mkdir -p \~/.fonts
-          cp "$FONTS_DIR/"*.ttf \~/.fonts/ 2>/dev/null || true
-          fc-cache -f >/dev/null 2>&1 || true
-          ls -la \~/.fonts/ || true
+          mkdir -p ~/.fonts
+          cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          fc-cache -f > /dev/null 2>&1 || true
+
+          echo "~/.fonts contents"
+          ls -la ~/.fonts/
+
+          echo "Checking key fonts"
+          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf; do
+            if [ -f "$HOME/.fonts/$f" ]; then
+              echo "OK: $f"
+            else
+              echo "MISSING: $f"
+            fi
+          done
 
       - name: Python Packages Cache-Aware
         run: |
-          set -euo pipefail
           VENV="$DEPS_DIR/python-venv"
-          REQUIRED_IMPORTS="edge_tts PIL mutagen gtts requests numpy scipy soundfile"
-
-          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts, requests, numpy, scipy, soundfile" 2>/dev/null; then
+          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
             echo "Python packages CACHED"
           else
             echo "Python packages install"
             rm -rf "$VENV"
             python3 -m venv "$VENV"
-            "$VENV/bin/pip" install --upgrade pip setuptools wheel --quiet
-            "$VENV/bin/pip" install --no-cache-dir \
-              requests \
-              edge-tts \
-              mutagen \
-              Pillow \
-              google-api-python-client \
-              google-auth-httplib2 \
-              google-auth-oauthlib \
-              gTTS \
-              piper-tts \
-              numpy \
-              scipy \
-              soundfile \
-              httpx \
-              aiohttp \
-              tenacity \
-              python-dotenv
+            "$VENV/bin/pip" install --upgrade pip --quiet
+            "$VENV/bin/pip" install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib gTTS piper-tts numpy scipy soundfile
             touch "$VENV/.installed"
           fi
           echo "$VENV/bin" >> $GITHUB_PATH
-          "$VENV/bin/python" -c "import sys; print(sys.version)"
-          "$VENV/bin/pip" list | head -30
 
       - name: Piper Models Cache-Aware
         run: |
-          set -euo pipefail
           P="$DEPS_DIR/piper"
-          mkdir -p "$P"
-
-          if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ] && [ -f "$P/hi_IN-priyamvada-medium.onnx" ]; then
+          if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
             echo "Piper models CACHED"
           else
             echo "Piper models download"
-            rm -rf "$P"
-            mkdir -p "$P"
+            rm -rf "$P" && mkdir -p "$P"
             cd "$P"
             BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-            for attempt in 1 2 3; do
-              wget -q --timeout=120 --tries=2 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx && break
-              sleep 3
-            done
-            for attempt in 1 2 3; do
-              wget -q --timeout=120 --tries=2 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json && break
-              sleep 3
-            done
-            for attempt in 1 2 3; do
-              wget -q --timeout=120 --tries=2 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx" -O hi_IN-priyamvada-medium.onnx && break
-              sleep 3
-            done
-            for attempt in 1 2 3; do
-              wget -q --timeout=120 --tries=2 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json && break
-              sleep 3
-            done
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx" -O hi_IN-priyamvada-medium.onnx || true
+            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json || true
             touch "$P/.installed"
             cd "$GITHUB_WORKSPACE"
           fi
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
-          ls -la "$P/" || true
 
       - name: Master Tool Health Check
         id: health
         run: |
-          set -euo pipefail
           REPORT_FILE="$DEPS_DIR/tools_status.json"
-          {
-            echo "{"
-            echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
-            echo "  \"tools\": {"
-          } > "$REPORT_FILE"
-
+          echo "{" > "$REPORT_FILE"
+          echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
+          echo "  \"tools\": {" >> "$REPORT_FILE"
           FIRST=1
           add_entry() {
             local name="$1"
             local status="$2"
             local detail="$3"
-            if [ $FIRST -eq 0 ]; then
-              echo "," >> "$REPORT_FILE"
-            fi
+            if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
             FIRST=0
             printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
             echo "[HEALTH] $name $status $detail"
@@ -358,7 +294,7 @@ jobs:
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
-          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf NotoColorEmoji.ttf; do
+          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf NotoEmoji-Regular.ttf; do
             if [ -f "$DEPS_DIR/fonts/$f" ]; then
               SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
               add_entry "font-$f" "ok" "$SZ bytes"
@@ -371,7 +307,7 @@ jobs:
           LIBS=$(ls -1 "$DEPS_DIR/libs" 2>/dev/null | wc -l)
           add_entry "cached-libs" "ok" "$LIBS files"
 
-          for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY ELEVENLABS_API_KEY DEEPL_API_KEY FREESOUND_API_KEY PEXELS_API_KEY PIXABAY_API_KEY COVERR_API_KEY TELEGRAM_BOT_TOKEN FACEBOOK_INSTAGRAM_META_TOKEN TOKEN_GITHUB GOOGLE_DRIVE_CLIENT_ID GOOGLE_DRIVE_CLIENT_SECRET GOOGLE_DRIVE_REFRESH_TOKEN; do
+          for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY ELEVENLABS_API_KEY DEEPL_API_KEY FREESOUND_API_KEY PEXELS_API_KEY PIXABAY_API_KEY COVERR_API_KEY TELEGRAM_BOT_TOKEN FACEBOOK_INSTAGRAM_META_TOKEN; do
             if [ -n "${!key:-}" ]; then
               add_entry "key:$key" "ok" "configured"
             else
@@ -379,12 +315,8 @@ jobs:
             fi
           done
 
-          {
-            echo ""
-            echo "  }"
-            echo "}"
-          } >> "$REPORT_FILE"
-
+          echo "  }" >> "$REPORT_FILE"
+          echo "}" >> "$REPORT_FILE"
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
           cat "$REPORT_FILE"
 
@@ -419,40 +351,25 @@ jobs:
           DEPS_DIR: ${{ env.DEPS_DIR }}
           PIPER_DIR: ${{ env.DEPS_DIR }}/piper
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
-          PYTHONUNBUFFERED: "1"
-          PYTHONIOENCODING: "utf-8"
-        run: |
-          set -euo pipefail
-          if [ ! -f "Social media/Facebook/Story_video.py" ]; then
-            echo "Story_video.py missing"
-            exit 1
-          fi
-          python3 "Social media/Facebook/Story_video.py"
+        run: python3 "Social media/Facebook/Story_video.py"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: fb-story-video
-          path: |
-            Final_FB_Story.mp4
-            *.mp4
-            logs/**
+          path: Final_FB_Story.mp4
           retention-days: 5
           if-no-files-found: ignore
-          compression-level: 6
 
       - name: Cleanup Public Repo
         if: always()
         run: |
           rm -rf "Social media"
           rm -f Final_FB_Story.mp4
-          rm -rf temp_private_repo
-          find . -name "*.pyc" -delete 2>/dev/null || true
-          find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
       - name: Cache Status
         if: always()
         run: |
           echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
-          df -h . || true
+          ls -1 $DEPS_DIR/libs 2>/dev/null | wc -l
