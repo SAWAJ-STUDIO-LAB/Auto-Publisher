@@ -1,11 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# 🔵 FACEBOOK STORY AUTOMATION — FINAL CLEAN VERSION
+# 🔵 FACEBOOK STORY AUTOMATION — PRODUCTION READY (Single File)
 # ═══════════════════════════════════════════════════════════════════════════
-# ✅ Single file — self-contained
-# ✅ Vertical 3-line stack (screenshot jaisa)
-# ✅ NO chakor box anywhere
-# ✅ Cache-aware
-# ✅ 100% verified
+# ✅ Fully self-contained
+# ✅ Vertical 3-line stack (no box / no chakor)
+# ✅ Smart caching (FFmpeg, fonts, Piper, Python packages)
+# ✅ Multi-AI fallback + robust TTS chain
+# ✅ Clean, readable, production-grade
 # ═══════════════════════════════════════════════════════════════════════════
 
 name: "🔵 FACEBOOK STORY"
@@ -19,7 +19,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '30 23 * * *'
+    - cron: '30 23 * * *'   # 11:30 PM UTC daily
 
 permissions:
   contents: read
@@ -35,53 +35,53 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v9
+      CACHE_VERSION: v10
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 1. CHECKOUT
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 2. RESTORE MASTER CACHE
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🗂️ Restore Master Cache
         id: master-cache
         uses: actions/cache@v4
         with:
           path: |
             .dependencies
-            ~/.cache/pip
-            ~/.local/share/piper
-          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+            \~/.cache/pip
+            \~/.local/share/piper
+          key: \( {{ runner.os }}-fb-story-master- \){{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
           restore-keys: |
-            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
+            \( {{ runner.os }}-fb-story-master- \){{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 3. PREPARE FOLDERS
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 📁 Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,logs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
           echo "✅ Deps folder ready: $DEPS_DIR"
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 4. PYTHON SETUP
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ═══════════════════════════════════════════════════════════════════
-      # 5. FFmpeg + SoX + espeak-ng
-      # ═══════════════════════════════════════════════════════════════════
-      - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
+      # ─────────────────────────────────────────────────────────────────────
+      # 5. FFmpeg + SoX + espeak-ng + System Fonts
+      # ─────────────────────────────────────────────────────────────────────
+      - name: 🎬 FFmpeg + System Tools (Cache-Aware)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/ffprobe" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
@@ -100,7 +100,7 @@ jobs:
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
           else
-            echo "📥 Installing FFmpeg + SoX + espeak-ng"
+            echo "📥 Installing FFmpeg + SoX + espeak-ng + fonts"
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
@@ -116,12 +116,12 @@ jobs:
           ffmpeg -version | head -1
           sox --version
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 6. CUSTOM FONTS
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🔤 Custom Fonts (Cache-Aware)
         run: |
-          if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
+          if [ -f "\( DEPS_DIR/.fonts_ok" ] && [ " \)(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
             echo "⚡ Custom fonts CACHED"
           else
             echo "📥 Downloading custom fonts"
@@ -139,13 +139,13 @@ jobs:
             done
             touch "$DEPS_DIR/.fonts_ok"
           fi
-          mkdir -p ~/.fonts
-          cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
+          mkdir -p \~/.fonts
+          cp "$DEPS_DIR/fonts/"*.ttf \~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 7. PYTHON PACKAGES
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🐍 Python Packages (Cache-Aware)
         run: |
           VENV="$DEPS_DIR/python-venv"
@@ -163,9 +163,9 @@ jobs:
           fi
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 8. PIPER MODELS
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🎙️ Piper Models (Cache-Aware)
         run: |
           P="$DEPS_DIR/piper"
@@ -185,9 +185,9 @@ jobs:
           fi
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 9. TOOL HEALTH CHECK
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🔍 Master Tool Health Check
         id: health
         run: |
@@ -213,18 +213,18 @@ jobs:
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
           cat "$REPORT_FILE"
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 10. CREATE PYTHON SCRIPT
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 📝 Create Python Script
         run: |
           mkdir -p "scripts"
           cat > "scripts/story_video.py" << 'PYEOF'
-          # ═══════════════════════════════════════════════════════════════════
-          # ISLAMIC HADITH STORY — VERTICAL STACK FINAL VERSION
-          # ═══════════════════════════════════════════════════════════════════
-          import os, re, time, random, subprocess, requests, shutil, sys, glob
-          import traceback, json, math
+          #!/usr/bin/env python3
+          # ═══════════════════════════════════════════════════════════════
+          # ISLAMIC HADITH STORY — VERTICAL 3-LINE STACK (FINAL)
+          # ═══════════════════════════════════════════════════════════════
+          import os, re, time, random, subprocess, requests, shutil, sys, json, math, traceback
           from datetime import datetime
           from mutagen.mp3 import MP3
           from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
@@ -241,30 +241,29 @@ jobs:
               status_forcelist=[429, 500, 502, 503, 504])))
 
           # ─── Environment ───
-          TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-          TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-          META_TOKEN = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
-          DEPS_DIR = os.environ.get("DEPS_DIR", os.path.expanduser("~/.dependencies"))
-          PIPER_DIR = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
-          TOOLS_STATUS_FILE = os.environ.get("TOOLS_STATUS_FILE", "")
+          TG_TOKEN     = os.environ.get("TELEGRAM_BOT_TOKEN")
+          TG_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID")
+          META_TOKEN   = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
+          DEPS_DIR     = os.environ.get("DEPS_DIR", os.path.expanduser("\~/.dependencies"))
+          PIPER_DIR    = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
+          TOOLS_STATUS = os.environ.get("TOOLS_STATUS_FILE", "")
 
           event_name = os.environ.get("GITHUB_EVENT_NAME", "")
           should_post_social = (event_name == "schedule") or \
                                (str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true")
 
           # ─── Constants ───
-          RUN_START = time.time()
+          RUN_START     = time.time()
           RUN_START_STR = datetime.utcnow().strftime("%d-%b-%Y %H:%M:%S UTC")
           FPS, INTRO_SEC, OUTRO_SEC, W, H = 25, 3.5, 5.0, 1080, 1920
           VIDEO_MIN, VIDEO_MAX = 35.0, 62.0
           VOICE_MIN, VOICE_MAX = VIDEO_MIN - 3.2, VIDEO_MAX - 3.2
 
-          BRAND_NAME = "SAWAJ STUDIO"
+          BRAND_NAME   = "SAWAJ STUDIO"
           BRAND_HANDLE = "@SawajStudio"
-          BISMILLAH_ARABIC = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
-          AMEEN_ARABIC = "آمین ثم آمین"
+          BISMILLAH    = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+          AMEEN        = "آمین ثم آمین"
 
-          # ─── Books ───
           BOOKS = [
               {"eng": "eng-bukhari",  "ara": "ara-bukhari",  "name": "सहीह अल-बुख़ारी",    "max": 7563, "grade": "Sahih"},
               {"eng": "eng-muslim",   "ara": "ara-muslim",   "name": "सहीह मुस्लिम",       "max": 3032, "grade": "Sahih"},
@@ -281,7 +280,6 @@ jobs:
               "text": [255, 245, 220], "accent": [255, 200, 80], "glow": [255, 220, 120],
           }
 
-          # ─── Dot colors (screenshot jaisa) ───
           COLOR_POOL = [
               (255, 100, 150), (80, 180, 255), (100, 220, 100),
               (255, 200, 60),  (200, 140, 240), (255, 150, 80),
@@ -289,16 +287,6 @@ jobs:
               (255, 180, 100),
           ]
 
-          def _hash(s):
-              h = 0
-              for c in str(s):
-                  h = (h * 31 + ord(c)) & 0xFFFFFFFF
-              return h
-
-          def color_for_word(word):
-              return COLOR_POOL[_hash(word) % len(COLOR_POOL)]
-
-          # ─── Validation lists ───
           MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney",
                          "harp","melody","song","music","instrument","beat","hip hop",
                          "edm","jazz","rock","saxophone","trumpet","orchestra",
@@ -324,9 +312,19 @@ jobs:
               "clouds sky timelapse", "islamic geometric pattern",
           ]
 
+          # ─── Helpers ───
+          def _hash(s):
+              h = 0
+              for c in str(s):
+                  h = (h * 31 + ord(c)) & 0xFFFFFFFF
+              return h
+
+          def color_for_word(word):
+              return COLOR_POOL[_hash(word) % len(COLOR_POOL)]
+
           def s_rgb(v):
               try: return max(0, min(255, int(v)))
-              except Exception: return 128
+              except: return 128
 
           def val_palette(p):
               if not isinstance(p, dict): return dict(FB_PALETTE)
@@ -339,7 +337,7 @@ jobs:
                       r[k] = [s_rgb(rgb[0]), s_rgb(rgb[1]), s_rgb(rgb[2])]
                   if sum(r["text"]) < 300: r["text"] = [255, 245, 220]
                   return r
-              except Exception:
+              except:
                   return dict(FB_PALETTE)
 
           def val_bg(q):
@@ -400,8 +398,8 @@ jobs:
 
           def load_tools():
               try:
-                  if TOOLS_STATUS_FILE and os.path.exists(TOOLS_STATUS_FILE):
-                      with open(TOOLS_STATUS_FILE) as f:
+                  if TOOLS_STATUS and os.path.exists(TOOLS_STATUS):
+                      with open(TOOLS_STATUS) as f:
                           R["tools"] = json.load(f).get("tools", {})
               except Exception as e:
                   print(f"[TOOLS] {e}")
@@ -478,26 +476,28 @@ jobs:
                   return ""
 
           # ═══════════════════════════════════════════════════════════════
-          # AI CALL
+          # AI CALL (Multi-provider fallback)
           # ═══════════════════════════════════════════════════════════════
           def call_ai(prompt, mx=1000, task="gen", jm=True):
-              pv = []
+              providers = []
               if os.environ.get("OPENROUTER_API_KEY"):
-                  pv.append(("OpenRouter", "https://openrouter.ai/api/v1/chat/completions",
+                  providers.append(("OpenRouter", "https://openrouter.ai/api/v1/chat/completions",
                       {"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}, "openai/gpt-4o-mini"))
               if os.environ.get("GROQ_API_KEY"):
-                  pv.append(("Groq", "https://api.groq.com/openai/v1/chat/completions",
+                  providers.append(("Groq", "https://api.groq.com/openai/v1/chat/completions",
                       {"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, "llama-3.3-70b-versatile"))
               if os.environ.get("GEMINI_API_KEY"):
-                  pv.append(("Gemini", None, None, None))
+                  providers.append(("Gemini", None, None, None))
               if os.environ.get("CEREBRAS_API_KEY"):
-                  pv.append(("Cerebras", "https://api.cerebras.ai/v1/chat/completions",
+                  providers.append(("Cerebras", "https://api.cerebras.ai/v1/chat/completions",
                       {"Authorization": f"Bearer {os.environ['CEREBRAS_API_KEY']}"}, "llama3.1-8b"))
               if os.environ.get("MISTRAL_API_KEY"):
-                  pv.append(("Mistral", "https://api.mistral.ai/v1/chat/completions",
+                  providers.append(("Mistral", "https://api.mistral.ai/v1/chat/completions",
                       {"Authorization": f"Bearer {os.environ['MISTRAL_API_KEY']}"}, "mistral-small-latest"))
-              if not pv: return None
-              for name, url, h, model in pv:
+
+              if not providers: return None
+
+              for name, url, headers, model in providers:
                   try:
                       if name == "Gemini":
                           body = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -510,11 +510,11 @@ jobs:
                               R["ai"].append({"name": name, "task": task, "status": "ok"})
                               return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                       else:
-                          pl = {"model": model, "messages": [{"role": "user", "content": prompt}],
-                                "temperature": 0.9, "max_tokens": mx}
-                          if jm: pl["response_format"] = {"type": "json_object"}
-                          r = session.post(url, headers={**h, "Content-Type": "application/json"},
-                              json=pl, timeout=60)
+                          payload = {"model": model, "messages": [{"role": "user", "content": prompt}],
+                                     "temperature": 0.9, "max_tokens": mx}
+                          if jm: payload["response_format"] = {"type": "json_object"}
+                          r = session.post(url, headers={**headers, "Content-Type": "application/json"},
+                                           json=payload, timeout=60)
                           if r.status_code == 200:
                               R["ai"].append({"name": name, "task": task, "status": "ok"})
                               return r.json()["choices"][0]["message"]["content"].strip()
@@ -530,10 +530,10 @@ jobs:
               m = re.search(r'\{.*\}', t, re.DOTALL)
               if not m: return None
               try: return json.loads(m.group(0))
-              except Exception: return None
+              except: return None
 
           def ai_gen_everything(he, ha=""):
-              pr = f"""You are an Islamic short-video creator.
+              prompt = f"""You are an Islamic short-video creator.
           Hadith (EN): "{he}"
           Hadith (AR): "{ha[:200]}"
           Return ONLY valid JSON:
@@ -549,11 +549,11 @@ jobs:
             "engagement_text": "Hindi", "sound_hint_text": "Hindi",
             "sadaqah_cta": "Hindi", "brand_tagline": "Hindi"}}
           RULES: NO music, NO people in bg. Hindi Devanagari. RGB 0-255. ONLY JSON."""
-              p = parse_json(call_ai(pr, 1400, "gen", True))
-              if not p: p = {}
 
-              def sf(k, d=""): return sanitize(p.get(k, "")) or d
-              def st(k, d, mx=100): return val_text(p.get(k, ""), mx) or d
+              data = parse_json(call_ai(prompt, 1400, "gen", True)) or {}
+
+              def sf(k, d=""): return sanitize(data.get(k, "")) or d
+              def st(k, d, mx=100): return val_text(data.get(k, ""), mx) or d
 
               hk = sf("hook")
               bad_hooks = ["की अहमियत", "के बारे में", "का हिस्सा", "की बात", "का ज़िक्र"]
@@ -567,25 +567,24 @@ jobs:
               hk = re.sub(r'\?।|।\?', '?', hk)
               hk = add_respect_prophet(add_respect_allah(hk))
 
-              it = sf("intro")
-              it = add_respect_prophet(add_respect_allah(it))
-              if it and not it.endswith("।") and not it.endswith("?"):
+              it = add_respect_prophet(add_respect_allah(sf("intro")))
+              if it and not it.endswith(("।", "?")):
                   it += "।"
 
-              em = str(p.get("emotion", "")).lower().strip()
+              em = str(data.get("emotion", "")).lower().strip()
               if em not in ["calm", "khushu", "tawbah", "shukr", "dhikr"]:
                   em = "calm"
 
-              palette = val_palette(p.get("color_palette", {}))
+              palette = val_palette(data.get("color_palette", {}))
 
               bg_q = []
-              for q in p.get("bg_queries", [])[:3]:
+              for q in data.get("bg_queries", [])[:3]:
                   v = val_bg(q)
                   if v: bg_q.append(v)
               if not bg_q:
                   bg_q = random.sample(SAFE_BG_QUERIES, 3)
 
-              amb_q = val_amb(p.get("ambience_query", "")) or "gentle rain nature"
+              amb_q = val_amb(data.get("ambience_query", "")) or "gentle rain nature"
               eng_txt = st("engagement_text", "याद रखें", 30)
               snd_txt = st("sound_hint_text", "सुनिए", 20)
               sda_txt = st("sadaqah_cta", "इस हदीस को शेयर करना सदक़ा जारिया है", 60)
@@ -596,7 +595,7 @@ jobs:
               cta = cta_raw if cta_raw and not any(bp in cta_raw for bp in bad_cta) \
                     else "इस हदीस को 3 दोस्तों को भेजें।"
 
-              tags = val_tags(p.get("hashtags", []))
+              tags = val_tags(data.get("hashtags", []))
               if not tags:
                   tags = ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
               for tg in ["#Hadith","#Sunnah","#Islam","#Quran","#DailyHadith","#IslamicReminders"]:
@@ -614,7 +613,7 @@ jobs:
                   "category": sf("category").split()[0] if sf("category") else "",
                   "emotion": em, "narrator": sf("narrator"),
                   "quran_ref": sf("quran_ref"),
-                  "quran_arabic": sanitize_ar(p.get("quran_arabic","")),
+                  "quran_arabic": sanitize_ar(data.get("quran_arabic","")),
                   "outro_main": sf("outro_main", "Fi Amanillah"),
                   "outro_cta": cta, "hashtags": tags,
                   "palette": palette, "bg_queries": bg_q,
@@ -641,7 +640,7 @@ jobs:
               return None
 
           # ═══════════════════════════════════════════════════════════════
-          # TTS ENGINE
+          # TTS ENGINE (Edge → Piper → espeak)
           # ═══════════════════════════════════════════════════════════════
           def ck_a(p, m=3000): return os.path.exists(p) and os.path.getsize(p) > m
 
@@ -701,7 +700,7 @@ jobs:
               for name, fn in engines:
                   if os.path.exists(out):
                       try: os.remove(out)
-                      except Exception: pass
+                      except: pass
                   try:
                       ok, detail = fn(text, out)
                       if ok and ck_a(out):
@@ -942,8 +941,7 @@ jobs:
                               continue
                           ara = ""
                           try:
-                              ar = session.get(f"{base}/editions/{book['ara']}/{num}.json",
-                                              timeout=10)
+                              ar = session.get(f"{base}/editions/{book['ara']}/{num}.json", timeout=10)
                               if ar.status_code == 200:
                                   ad = ar.json().get("hadiths", [])
                                   if ad:
@@ -979,7 +977,7 @@ jobs:
               return R["hadith"]
 
           # ═══════════════════════════════════════════════════════════════
-          # DECORATIVE
+          # DECORATIVE EFFECTS
           # ═══════════════════════════════════════════════════════════════
           def islamic_pattern(img, op=0.03):
               try:
@@ -1029,7 +1027,7 @@ jobs:
                   return img
 
           # ═══════════════════════════════════════════════════════════════
-          # ⭐ VERTICAL 3-LINE STACK — SCREENSHOT JAISA (NO BOX)
+          # ⭐ VERTICAL 3-LINE STACK — NO BOX
           # ═══════════════════════════════════════════════════════════════
           def draw_trilingual_vertical(img, hindi_word, arabic_word, english_word,
                                         palette, fonts, alpha=255):
@@ -1040,8 +1038,7 @@ jobs:
               """
               try:
                   d = ImageDraw.Draw(img)
-
-                  x_dot = int(W * 0.08)
+                  x_dot  = int(W * 0.08)
                   x_text = int(W * 0.13)
                   base_y = int(H * 0.48)
                   line_gap = 110
@@ -1055,7 +1052,6 @@ jobs:
                   for word, font, y, dot_r in lines:
                       if not word:
                           continue
-
                       color = color_for_word(word)
 
                       # Colored dot
@@ -1082,7 +1078,6 @@ jobs:
                           font=font,
                           anchor="lm"
                       )
-
                   return img
               except Exception as e:
                   print(f"[TRI-VERTICAL] {str(e)[:80]}")
@@ -1158,7 +1153,6 @@ jobs:
               load_tools()
               log("Start", "info", RUN_START_STR)
 
-              # Hijri date
               hj = hijri()
               if hj:
                   log_enh(f"Hijri: {hj}")
@@ -1190,7 +1184,6 @@ jobs:
               R["es"]["palette"] = palette.get("name", "custom")
               log("Palette (AI)", "ok", palette.get("name", "-"))
 
-              # Word confirmation
               conf_words("hook", h.get("hook", ""))
               conf_words("hindi", hindi)
               conf_words("english", h.get("english", ""))
@@ -1248,22 +1241,22 @@ jobs:
               log("Logo", "ok" if has_logo else "skip")
 
               # Fonts
-              fonts_dir = os.path.expanduser("~/.fonts")
+              fonts_dir = os.path.expanduser("\~/.fonts")
               intro, outro = INTRO_SEC, OUTRO_SEC
               total = min(intro + vdur + outro, 65.0)
               os.makedirs("story_frames", exist_ok=True)
 
               try:
                   F = {
-                      "big": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 72),
-                      "s": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 46),
+                      "big":  ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 72),
+                      "s":    ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 46),
                       "tiny": ImageFont.truetype(f"{fonts_dir}/NotoSans-Regular.ttf", 30),
                       "hook": ImageFont.truetype(f"{fonts_dir}/NotoSansDevanagari-Bold.ttf", 76),
-                      "hi": ImageFont.truetype(f"{fonts_dir}/NotoSansDevanagari-Bold.ttf", 52),
-                      "ar": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 60),
-                      "en": ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 40),
+                      "hi":   ImageFont.truetype(f"{fonts_dir}/NotoSansDevanagari-Bold.ttf", 52),
+                      "ar":   ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 60),
+                      "en":   ImageFont.truetype(f"{fonts_dir}/NotoSans-Bold.ttf", 40),
                       "bism": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 54),
-                      "ameen": ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 68),
+                      "ameen":ImageFont.truetype(f"{fonts_dir}/NotoNaskhArabic-Bold.ttf", 68),
                   }
               except Exception:
                   d = ImageFont.load_default()
@@ -1276,20 +1269,17 @@ jobs:
               print(f"[FRAMES] {tf}...")
 
               # Word timing
-              hindi_words = sanitize(hindi).split()
-              arabic_words = sanitize_ar(h.get("arabic","")).split()
+              hindi_words   = sanitize(hindi).split()
+              arabic_words  = sanitize_ar(h.get("arabic","")).split()
               english_words = sanitize(h.get("english","")).split()
               max_words = max(len(hindi_words), len(arabic_words), len(english_words))
               word_dur = vdur / max(1, max_words)
-
-              word_prog = 0.0
 
               # ═══════════════════════════════════════════════════════════
               # FRAME RENDER LOOP
               # ═══════════════════════════════════════════════════════════
               for fi in range(tf):
                   t = fi / fps
-                  prog = fi / tf
                   img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                   draw = ImageDraw.Draw(img)
 
@@ -1299,9 +1289,9 @@ jobs:
                       if mt < 0.8:
                           ba = int(255 * min(1.0, mt/0.3))
                           try:
-                              bb = draw.textbbox((0,0), BISMILLAH_ARABIC, font=F["bism"])
+                              bb = draw.textbbox((0,0), BISMILLAH, font=F["bism"])
                               draw.text((W//2 - (bb[2]-bb[0])//2, int(H*0.18)),
-                                        BISMILLAH_ARABIC,
+                                        BISMILLAH,
                                         fill=tuple(palette["glow"]) + (ba,),
                                         font=F["bism"])
                           except Exception:
@@ -1329,7 +1319,6 @@ jobs:
                   elif t < intro + vdur:
                       mt = t - intro
 
-                      # Logo animation
                       if has_logo:
                           try:
                               lg = Image.open("avatar.png").convert("RGBA").resize(
@@ -1341,24 +1330,20 @@ jobs:
                           except Exception:
                               pass
 
-                      # Current word
                       word_idx = int(mt / word_dur)
                       cur_hi = hindi_words[word_idx] if word_idx < len(hindi_words) else ""
                       cur_ar = arabic_words[word_idx] if word_idx < len(arabic_words) else ""
                       cur_en = english_words[word_idx] if word_idx < len(english_words) else ""
 
-                      # Fade in
                       local_t = mt - (word_idx * word_dur)
                       fa = min(1.0, local_t / 0.25)
                       alpha_val = int(255 * fa)
 
-                      # ⭐ VERTICAL STACK (NO BOX)
                       img = draw_trilingual_vertical(
                           img, cur_hi, cur_ar, cur_en,
                           palette, F, alpha=alpha_val
                       )
                       draw = ImageDraw.Draw(img)
-                      word_prog = mt / vdur
 
                   # ─── OUTRO ───
                   else:
@@ -1401,9 +1386,9 @@ jobs:
                       if ot >= outro - 1.2:
                           aa = int(255 * min(1.0, (ot - (outro-1.2)) / 0.6))
                           try:
-                              bb = draw.textbbox((0,0), AMEEN_ARABIC, font=F["ameen"])
+                              bb = draw.textbbox((0,0), AMEEN, font=F["ameen"])
                               draw.text((W//2 - (bb[2]-bb[0])//2, int(H*0.90)),
-                                        AMEEN_ARABIC,
+                                        AMEEN,
                                         fill=tuple(palette["glow"]) + (aa,),
                                         font=F["ameen"])
                           except Exception:
@@ -1420,9 +1405,7 @@ jobs:
               log("Frames", "ok", f"{tf}")
               log_enh("Vertical 3-Line Stack (No Box)")
 
-              # ═══════════════════════════════════════════════════════════
-              # FINAL RENDER
-              # ═══════════════════════════════════════════════════════════
+              # Final Render
               final = "Final_FB_Story.mp4"
               run(f'ffmpeg -y -i {bg} -framerate {fps} '
                   f'-i story_frames/frame_%05d.png -i s_voice.mp3 '
@@ -1492,17 +1475,17 @@ jobs:
                   R["fb"] = {"status": "skipped"}
                   log("FB", "skip", "manual")
 
-              # Cleanup temp files
+              # Cleanup
               for f in ["s_raw.mp3", "s_clean.mp3", "s_v.mp3", "s_voice.mp3",
                         "amb_raw.mp3", "bgl.txt"]:
                   if os.path.exists(f):
                       try: os.remove(f)
-                      except Exception: pass
+                      except: pass
               for i in range(5):
                   for f in [f"tmp_{i}.mp4", f"bg_{i}.mp4", f"tmp_mix_{i}.mp4"]:
                       if os.path.exists(f):
                           try: os.remove(f)
-                          except Exception: pass
+                          except: pass
               shutil.rmtree("story_frames", ignore_errors=True)
               log("Cleanup", "ok")
 
@@ -1527,9 +1510,9 @@ jobs:
           echo "✅ Python script created"
           wc -l scripts/story_video.py
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 11. RUN MAIN PIPELINE
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 🚀 Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -1558,9 +1541,9 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: python3 "scripts/story_video.py"
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 12. UPLOAD ARTIFACT
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1570,9 +1553,9 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       # 13. CACHE STATUS
-      # ═══════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────────────
       - name: 📊 Cache Status
         if: always()
         run: |
