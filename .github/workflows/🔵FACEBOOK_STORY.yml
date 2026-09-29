@@ -25,11 +25,11 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v18
+      CACHE_VERSION: v20
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
-      - name: Checkout Public Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Restore Master Dependencies Cache
@@ -40,58 +40,22 @@ jobs:
             .dependencies
             ~/.cache/pip
             ~/.local/share/piper
-          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
+          key: ${{ runner.os }}-fb-story-${{ env.CACHE_VERSION }}-${{ hashFiles('**/requirements.txt') || 'default' }}
           restore-keys: |
-            ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
-            ${{ runner.os }}-fb-story-master-
+            ${{ runner.os }}-fb-story-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-fb-story-
 
       - name: Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs,libs}
+          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,libs,scripts}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
-
-      - name: Fetch Code from Private Repository
-        env:
-          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-        run: |
-          PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
-
-          if [ -z "$TOKEN_GITHUB" ]; then
-            echo "TOKEN_GITHUB is empty - check GitHub Secrets"
-            exit 1
-          fi
-          echo "Token length: ${#TOKEN_GITHUB}"
-
-          git clone --depth 1 \
-            "https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git" \
-            temp_private_repo
-
-          if [ ! -d "temp_private_repo" ]; then
-            echo "Clone failed"
-            exit 1
-          fi
-
-          mkdir -p "Social media/Facebook"
-          cp "temp_private_repo/Social media/Facebook/Story_video.py" \
-             "Social media/Facebook/Story_video.py"
-
-          if [ -f "Social media/Facebook/Story_video.py" ]; then
-            LINES=$(wc -l < "Social media/Facebook/Story_video.py")
-            echo "Script copied - $LINES lines"
-          else
-            echo "Script copy failed"
-            exit 1
-          fi
-
-          rm -rf temp_private_repo
-          echo "Cleanup done"
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: FFmpeg + System Fonts Cache-Aware
+      - name: FFmpeg + System Tools Cache-Aware
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           LIB_DIR="$DEPS_DIR/libs"
@@ -124,7 +88,7 @@ jobs:
               sudo ldconfig
             fi
           else
-            echo "Fresh install of FFmpeg + SoX + espeak-ng"
+            echo "Fresh install"
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fontconfig
             sudo ldconfig
@@ -152,7 +116,7 @@ jobs:
           sox --version 2>&1 | head -1
           echo "Libs cached: $(ls -1 $LIB_DIR 2>/dev/null | wc -l)"
 
-      - name: Custom Fonts Cache-Aware
+      - name: Download Custom Fonts
         run: |
           FORCE_DOWNLOAD=0
           [ ! -f "$DEPS_DIR/fonts/NotoSans-Bold.ttf" ] && FORCE_DOWNLOAD=1
@@ -180,23 +144,7 @@ jobs:
               wget -q --timeout=60 --tries=3 "${FONTS[$name]}" -O "$DEPS_DIR/fonts/$name" || true
             done
 
-            echo "Downloaded files"
             ls -la "$DEPS_DIR/fonts/"
-
-            echo "FONT VERIFICATION"
-            for font in "$DEPS_DIR/fonts/"*.ttf; do
-              if [ -f "$font" ]; then
-                MAGIC=$(xxd -p -l 4 "$font" 2>/dev/null | tr 'a-f' 'A-F')
-                SZ=$(stat -c%s "$font")
-                if [[ "$MAGIC" == "00010000" || "$MAGIC" == "74727565" || "$MAGIC" == "4F54544F" ]]; then
-                  echo "VALID: $(basename $font) - $SZ bytes"
-                else
-                  echo "CORRUPT: $(basename $font) - deleting"
-                  rm -f "$font"
-                fi
-              fi
-            done
-
             touch "$DEPS_DIR/.fonts_ok"
           fi
 
@@ -204,92 +152,34 @@ jobs:
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-          echo "~/.fonts contents"
-          ls -la ~/.fonts/
-
           echo "=== CRITICAL FONT VERIFICATION ==="
           CRITICAL_FONTS=(
-            "NotoSans-Regular.ttf"
-            "NotoSans-Bold.ttf"
-            "NotoSansDevanagari-Regular.ttf"
-            "NotoSansDevanagari-Bold.ttf"
-            "NotoNaskhArabic-Regular.ttf"
-            "NotoNaskhArabic-Bold.ttf"
+            "NotoSans-Regular.ttf" "NotoSans-Bold.ttf"
+            "NotoSansDevanagari-Regular.ttf" "NotoSansDevanagari-Bold.ttf"
+            "NotoNaskhArabic-Regular.ttf" "NotoNaskhArabic-Bold.ttf"
           )
-
           MISSING=0
           for f in "${CRITICAL_FONTS[@]}"; do
             if [ -f "$DEPS_DIR/fonts/$f" ] && [ "$(stat -c%s "$DEPS_DIR/fonts/$f")" -gt 50000 ]; then
-              echo "OK: $f ($(stat -c%s "$DEPS_DIR/fonts/$f") bytes)"
+              echo "OK: $f"
             else
-              echo "MISSING/BAD: $f"
+              echo "MISSING: $f"
               MISSING=$((MISSING+1))
             fi
           done
-
           if [ $MISSING -gt 0 ]; then
             echo "CRITICAL: $MISSING fonts missing - aborting"
             exit 1
           fi
-
-          echo "=== FONTCONFIG DEEP VERIFY ==="
-
-          DEVA_MATCH=$(fc-match "Noto Sans Devanagari:bold" 2>/dev/null | grep -i "devanagari" || true)
-          ARAB_MATCH=$(fc-match "Noto Naskh Arabic:bold" 2>/dev/null | grep -i "arabic" || true)
-
-          if [ -z "$DEVA_MATCH" ]; then
-            echo "Devanagari not matched - forcing system copy"
-            sudo cp -f "$DEPS_DIR/fonts/NotoSansDevanagari-Bold.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
-            sudo cp -f "$DEPS_DIR/fonts/NotoSansDevanagari-Regular.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
-            sudo fc-cache -f > /dev/null 2>&1 || true
-          else
-            echo "Devanagari matched: $DEVA_MATCH"
-          fi
-
-          if [ -z "$ARAB_MATCH" ]; then
-            echo "Arabic not matched - forcing system copy"
-            sudo cp -f "$DEPS_DIR/fonts/NotoNaskhArabic-Bold.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
-            sudo cp -f "$DEPS_DIR/fonts/NotoNaskhArabic-Regular.ttf" /usr/share/fonts/truetype/ 2>/dev/null || true
-            sudo fc-cache -f > /dev/null 2>&1 || true
-          else
-            echo "Arabic matched: $ARAB_MATCH"
-          fi
-
-          echo "=== PIL GLYPH TEST ==="
-          python3 << 'PYEOF'
-from PIL import ImageFont
-import os
-d = os.environ.get("DEPS_DIR", "")
-tests = [
-    ("NotoSansDevanagari-Bold.ttf", "क"),
-    ("NotoNaskhArabic-Bold.ttf", "ب"),
-    ("NotoSans-Bold.ttf", "A"),
-]
-for fname, char in tests:
-    p = os.path.join(d, "fonts", fname)
-    if not os.path.exists(p):
-        print("MISSING:", fname)
-        continue
-    try:
-        font = ImageFont.truetype(p, 48)
-        bbox = font.getbbox(char)
-        if bbox and bbox[2] > bbox[0]:
-            print("OK:", fname, "width", bbox[2]-bbox[0])
-        else:
-            print("EMPTY GLYPH:", fname)
-    except Exception as e:
-        print("FAIL:", fname, str(e)[:60])
-PYEOF
-
           echo "=== ALL FONTS VERIFIED ==="
 
       - name: Python Packages Cache-Aware
         run: |
           VENV="$DEPS_DIR/python-venv"
-          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
+          if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen" 2>/dev/null; then
             echo "Python packages CACHED"
           else
-            echo "Python packages install"
+            echo "Installing Python packages"
             rm -rf "$VENV"
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
@@ -304,82 +194,21 @@ PYEOF
           if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
             echo "Piper models CACHED"
           else
-            echo "Piper models download"
+            echo "Downloading Piper models"
             rm -rf "$P" && mkdir -p "$P"
             cd "$P"
             BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
             wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx" -O hi_IN-pratham-medium.onnx || true
             wget -q --timeout=90 "$BASE/hi/hi_IN/pratham/medium/hi_IN-pratham-medium.onnx.json" -O hi_IN-pratham-medium.onnx.json || true
-            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx" -O hi_IN-priyamvada-medium.onnx || true
-            wget -q --timeout=90 "$BASE/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json" -O hi_IN-priyamvada-medium.onnx.json || true
             touch "$P/.installed"
             cd "$GITHUB_WORKSPACE"
           fi
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      - name: Master Tool Health Check
-        id: health
-        run: |
-          REPORT_FILE="$DEPS_DIR/tools_status.json"
-          echo "{" > "$REPORT_FILE"
-          echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
-          echo "  \"tools\": {" >> "$REPORT_FILE"
-          FIRST=1
-          add_entry() {
-            local name="$1"
-            local status="$2"
-            local detail="$3"
-            if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
-            FIRST=0
-            printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
-            echo "[HEALTH] $name $status $detail"
-          }
-
-          command -v ffmpeg >/dev/null 2>&1 && add_entry "ffmpeg" "ok" "present" || add_entry "ffmpeg" "fail" "not found"
-          command -v ffprobe >/dev/null 2>&1 && add_entry "ffprobe" "ok" "present" || add_entry "ffprobe" "fail" "not found"
-          command -v sox >/dev/null 2>&1 && add_entry "sox" "ok" "present" || add_entry "sox" "fail" "not found"
-          command -v espeak-ng >/dev/null 2>&1 && add_entry "espeak-ng" "ok" "present" || add_entry "espeak-ng" "fail" "not found"
-          command -v edge-tts >/dev/null 2>&1 && add_entry "edge-tts" "ok" "present" || add_entry "edge-tts" "fail" "not found"
-          command -v gtts-cli >/dev/null 2>&1 && add_entry "gtts" "ok" "present" || add_entry "gtts" "fail" "not found"
-          command -v piper >/dev/null 2>&1 && add_entry "piper-cli" "ok" "present" || add_entry "piper-cli" "fail" "not found"
-
-          [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ] && add_entry "piper-pratham" "ok" "present" || add_entry "piper-pratham" "fail" "missing"
-          [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ] && add_entry "piper-priyamvada" "ok" "present" || add_entry "piper-priyamvada" "fail" "missing"
-
-          FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
-          add_entry "custom-fonts" "ok" "$FC files"
-
-          for f in NotoSans-Bold.ttf NotoSansDevanagari-Bold.ttf NotoNaskhArabic-Bold.ttf; do
-            if [ -f "$DEPS_DIR/fonts/$f" ]; then
-              SZ=$(stat -c%s "$DEPS_DIR/fonts/$f")
-              add_entry "font-$f" "ok" "$SZ bytes"
-            else
-              add_entry "font-$f" "fail" "missing"
-            fi
-          done
-
-          [ -f "$DEPS_DIR/python-venv/.installed" ] && add_entry "python-venv" "ok" "installed" || add_entry "python-venv" "fail" "missing"
-          LIBS=$(ls -1 "$DEPS_DIR/libs" 2>/dev/null | wc -l)
-          add_entry "cached-libs" "ok" "$LIBS files"
-
-          for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY ELEVENLABS_API_KEY DEEPL_API_KEY FREESOUND_API_KEY PEXELS_API_KEY PIXABAY_API_KEY COVERR_API_KEY TELEGRAM_BOT_TOKEN FACEBOOK_INSTAGRAM_META_TOKEN; do
-            if [ -n "${!key:-}" ]; then
-              add_entry "key:$key" "ok" "configured"
-            else
-              add_entry "key:$key" "hold" "not set"
-            fi
-          done
-
-          echo "  }" >> "$REPORT_FILE"
-          echo "}" >> "$REPORT_FILE"
-          echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
-          cat "$REPORT_FILE"
-
       - name: Run Facebook Story Pipeline
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
@@ -391,22 +220,893 @@ PYEOF
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
-          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-          COVERR_API_KEY: ${{ secrets.COVERR_API_KEY }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
           DEPS_DIR: ${{ env.DEPS_DIR }}
           PIPER_DIR: ${{ env.DEPS_DIR }}/piper
-          TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
-        run: python3 "Social media/Facebook/Story_video.py"
+        run: |
+          cat > "$DEPS_DIR/scripts/story.py" << 'PYEOF'
+          import os, re, time, random, subprocess, requests, shutil, sys, math
+          import traceback, json
+          from datetime import datetime
+          from mutagen.mp3 import MP3
+          from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from requests.adapters import HTTPAdapter
+          from urllib3.util.retry import Retry
+
+          session = requests.Session()
+          session.mount("https://", HTTPAdapter(max_retries=Retry(
+              total=5, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])))
+
+          TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+          TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+          META_TOKEN = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
+          DEPS_DIR = os.environ.get("DEPS_DIR", os.path.expanduser("~/.dependencies"))
+          FONTS_DIR = os.environ.get("FONTS_DIR", os.path.join(DEPS_DIR, "fonts"))
+          PIPER_DIR = os.environ.get("PIPER_DIR", os.path.join(DEPS_DIR, "piper"))
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          should_post_social = (event_name == "schedule") or \
+                               (str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true")
+          RUN_START = time.time()
+          FPS, INTRO_SEC, OUTRO_SEC, W, H = 25, 3.5, 5.0, 1080, 1920
+          VIDEO_MIN, VOICE_MIN, VOICE_MAX = 35.0, 31.8, 58.8
+          TEXT_Y_POSITION = 0.75
+          BRAND_NAME = "SAWAJ STUDIO"
+          BRAND_HANDLE = "@SawajStudio"
+          BISMILLAH_ARABIC = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+          AMEEN_ARABIC = "آمین ثم آمین"
+
+          BOOKS = [
+              {"eng": "eng-bukhari",  "ara": "ara-bukhari",  "name": "सहीह अल-बुख़ारी",    "max": 7563},
+              {"eng": "eng-muslim",   "ara": "ara-muslim",   "name": "सहीह मुस्लिम",       "max": 3032},
+              {"eng": "eng-abudawud", "ara": "ara-abudawud", "name": "सुनन अबू दाऊद",      "max": 5274},
+              {"eng": "eng-tirmidhi", "ara": "ara-tirmidhi", "name": "जामी अत-तिर्मिज़ी",  "max": 3956},
+              {"eng": "eng-nasai",    "ara": "ara-nasai",    "name": "सुनन अन-नसाई",       "max": 5758},
+          ]
+
+          FB_PALETTE = {"name": "Royal Gold", "primary": [212,175,55], "secondary": [255,220,120],
+                        "text": [255,245,220], "accent": [255,200,80], "glow": [255,220,120]}
+
+          COLOR_POOL = [
+              (170,100,255),(255,220,60),(255,150,50),(80,180,255),(100,220,100),
+              (255,100,100),(255,150,200),(200,150,100),(240,240,240),(100,220,200),
+              (200,140,240),(255,200,100),(150,200,100),(255,180,80),(140,180,220),
+              (220,150,180),
+          ]
+
+          def _hash(s):
+              h = 0
+              for c in str(s): h = (h * 31 + ord(c)) & 0xFFFFFFFF
+              return h
+
+          def color_for_word(w):
+              return COLOR_POOL[_hash(w) % len(COLOR_POOL)]
+
+          _FONT_CACHE = {}
+          _FONT_MISSING = set()
+          _FONT_LOADED = {}
+
+          def _has_deva(s): return any('\u0900' <= ch <= '\u097F' for ch in str(s))
+          def _has_arab(s): return any('\u0600' <= ch <= '\u06FF' for ch in str(s))
+
+          def _pick_font(text, fb):
+              s = str(text)
+              if _has_deva(s): return "NotoSansDevanagari-Bold.ttf"
+              if _has_arab(s): return "NotoNaskhArabic-Bold.ttf"
+              return fb
+
+          def _font_has_glyphs(font, name):
+              try:
+                  if "Devanagari" in name: tc = "क"
+                  elif "Arabic" in name or "Naskh" in name: tc = "ب"
+                  else: return True
+                  bb = font.getbbox(tc)
+                  return bb is not None and (bb[2]-bb[0]) > 0
+              except: return False
+
+          def _sys_fallback(name, size):
+              pools = {
+                  "deva": ["/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+                           "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
+                  "arab": ["/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
+                           "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
+                  "latin": ["/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+                            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
+              }
+              n = name.lower()
+              k = "deva" if "devanagari" in n else "arab" if "arabic" in n or "naskh" in n else "latin"
+              for p in pools[k]:
+                  if os.path.exists(p):
+                      try:
+                          f = ImageFont.truetype(p, size)
+                          if _font_has_glyphs(f, name): return f
+                      except: pass
+              return ImageFont.load_default()
+
+          def get_font(name, size):
+              key = f"{name}_{size}"
+              if key in _FONT_CACHE: return _FONT_CACHE[key]
+              cands = []
+              if FONTS_DIR: cands.append(os.path.join(FONTS_DIR, name))
+              cands.append(os.path.expanduser(f"~/.fonts/{name}"))
+              cands.append(os.path.join(DEPS_DIR, "fonts", name))
+              cands += [f"/usr/share/fonts/truetype/noto/{name}",
+                        f"/usr/share/fonts/truetype/dejavu/{name}"]
+              for p in cands:
+                  if not os.path.exists(p): continue
+                  try:
+                      if os.path.getsize(p) < 1000: continue
+                      f = ImageFont.truetype(p, size)
+                      if not _font_has_glyphs(f, name): continue
+                      _FONT_CACHE[key] = f
+                      _FONT_LOADED[name] = p
+                      print(f"[FONT OK] {name} -> {p}")
+                      return f
+                  except: pass
+              print(f"[FONT !!] MISSING {name}, using fallback")
+              _FONT_MISSING.add(name)
+              fb = _sys_fallback(name, size)
+              _FONT_CACHE[key] = fb
+              return fb
+
+          def _trunc(d, text, font, mx, anchor="lm"):
+              if not text: return text
+              try:
+                  bb = d.textbbox((0,0), text, font=font, anchor=anchor)
+                  if (bb[2]-bb[0]) <= mx: return text
+                  for c in range(len(text)-1, 0, -1):
+                      t = text[:c] + ".."
+                      b2 = d.textbbox((0,0), t, font=font, anchor=anchor)
+                      if (b2[2]-b2[0]) <= mx: return t
+                  return text[:1] + ".."
+              except: return text
+
+          def sanitize(t):
+              if not t: return ""
+              t = re.sub(r'[\u200b-\u200f\ufeff\u202a-\u202e]', '', str(t))
+              t = re.sub(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2B00-\u2BFF\uFE00-\uFE0F]', '', t)
+              return t.replace('"','').replace("'",'').replace('\n',' ').strip()
+
+          def sanitize_ar(t):
+              if not t: return ""
+              return re.sub(r'[\u200b-\u200e\ufeff\u202a-\u202e]', '', str(t)).replace('\n',' ').strip()
+
+          def reveal(full, el, rate=0.28):
+              ws = sanitize(full).split()
+              if not ws: return ""
+              return " ".join(ws[:max(0, min(len(ws), int(el/rate)+1))])
+
+          def draw_vstack(img, hi_w, ar_w, en_w, vi, pal, fonts):
+              try:
+                  d = ImageDraw.Draw(img)
+                  ch = hi_w[vi] if vi < len(hi_w) else ""
+                  ca = ar_w[vi] if vi < len(ar_w) else ""
+                  ce = en_w[vi] if vi < len(en_w) else ""
+                  if not (ch or ca or ce): return img
+                  lh = 115
+                  sy = int(H * TEXT_Y_POSITION) - (3*lh)//2
+                  dr = 16; dx = int(W * 0.12); wx = dx + dr + 25
+                  mw = W - wx - 40
+                  rows = [(ch, fonts["hi"], sy, "hi"), (ca, fonts["ar"], sy+lh, "ar"),
+                          (ce, fonts["en"], sy+2*lh, "en")]
+                  for word, font, y, lg in rows:
+                      if not word: continue
+                      try:
+                          tb = d.textbbox((0,0), word, font=font)
+                          if tb is None or (tb[2]-tb[0]) <= 0: continue
+                      except: continue
+                      color = color_for_word(word)
+                      d.ellipse([dx-dr,y-dr,dx+dr,y+dr], fill=color+(255,))
+                      ws = _trunc(d, word, font, mw, "lm")
+                      for ax, ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                          d.text((wx+ax,y+ay), ws, fill=(0,0,0,200), font=font, anchor="lm")
+                      d.text((wx,y), ws, fill=tuple(pal["text"])+(255,), font=font, anchor="lm")
+                  return img
+              except Exception as e:
+                  print(f"[STACK] {e}"); return img
+
+          MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney",
+                         "harp","melody","song","music","instrument","beat","edm",
+                         "jazz","rock","saxophone","trumpet","orchestra","rap","pop"]
+          NON_ISLAMIC_BLOCK = ["girl","boy","woman","man","people","dance","wine",
+                               "alcohol","dog","pig","cross","church","idol","nude","bikini","bar","party"]
+          NATURE_WORDS = ["rain","wind","bird","water","forest","thunder","ocean","river",
+                          "stream","leaves","desert","night","crickets","waterfall","storm",
+                          "waves","fire","nature","ambient","soft","quiet","calm","breeze"]
+          BG_ALLOW = ["mosque","masjid","kaaba","mecca","medina","islamic","arabic",
+                      "calligraphy","night sky","stars","desert","mountain","sea","ocean",
+                      "clouds","sunrise","sunset","moon","lantern","architecture","pattern",
+                      "geometric","minaret","dome","quran","book","prayer","peaceful","sky","cloud"]
+          SAFE_BG = ["mosque exterior night empty", "desert landscape sunrise",
+                     "islamic architecture pattern", "night sky stars time lapse",
+                     "arabic calligraphy closeup", "mountain landscape sunset"]
+
+          def val_pal(p):
+              if not isinstance(p, dict): return dict(FB_PALETTE)
+              try:
+                  r = {"name": str(p.get("name","Custom"))[:40]}
+                  for k in ["primary","secondary","text","accent","glow"]:
+                      rgb = p.get(k, FB_PALETTE[k])
+                      if not isinstance(rgb, list) or len(rgb) != 3: return dict(FB_PALETTE)
+                      r[k] = [max(0,min(255,int(x))) for x in rgb]
+                  return r
+              except: return dict(FB_PALETTE)
+
+          def val_bg(q):
+              if not q or not isinstance(q, str): return None
+              ql = q.lower()
+              for b in NON_ISLAMIC_BLOCK + MUSIC_BLOCK:
+                  if b in ql: return None
+              for g in BG_ALLOW:
+                  if g in ql: return q.strip()[:80]
+              return None
+
+          def val_amb(q):
+              if not q or not isinstance(q, str): return None
+              ql = q.lower()
+              for b in MUSIC_BLOCK:
+                  if b in ql: return None
+              for g in NATURE_WORDS:
+                  if g in ql: return q.strip()[:60]
+              return None
+
+          def val_tags(t):
+              if not isinstance(t, list): return []
+              c = [x for x in t if isinstance(x,str) and x.startswith("#") and len(x)<40]
+              return c[:8] if len(c) >= 3 else []
+
+          R = {"errors": [], "warnings": [], "hadith": {}, "video": {}, "drive": {}, "fb": {},
+               "plat": {"hadith":"-","ambience":"-","bg":"-","tts":"-","trans":"-"},
+               "es": {"dots": 0, "palette": "none"}, "fonts": {}, "aic": {}}
+
+          def log_err(m): R["errors"].append(str(m)[:200]); print(f"[ERR] {m}")
+          def log_warn(m): R["warnings"].append(str(m)[:200]); print(f"[WARN] {m}")
+
+          def run(cmd, timeout=None):
+              print(f"[CMD] {cmd[:100]}")
+              subprocess.run(cmd, shell=True, check=True, timeout=timeout)
+
+          def dl(url, path, minsize=12000):
+              try:
+                  r = session.get(url, timeout=35)
+                  if r.status_code == 200 and len(r.content) > minsize:
+                      with open(path, "wb") as f: f.write(r.content)
+                      return True
+              except: pass
+              return False
+
+          def add_prophet(t):
+              if not t: return t
+              for p, r in [(r'\b(Prophet|Rasul|Rasool|Nabi)\b(?!\s*ﷺ)', r'\1 ﷺ'),
+                           (r'पैगंबर(?!\s*ﷺ)', 'पैगंबर ﷺ'), (r'नबी(?!\s*ﷺ)', 'नबी ﷺ')]:
+                  t = re.sub(p, r, t)
+              return t
+
+          def add_allah(t):
+              if not t: return t
+              t = re.sub(r'अल्लाह(?!\s*(तआला|SWT|ﷻ))', 'अल्लाह तआला', t)
+              t = re.sub(r'\bAllah\b(?!\s*(SWT|ﷻ|\(SWT\)))', 'Allah (SWT)', t)
+              return t
+
+          def hijri():
+              try:
+                  d = datetime.utcnow()
+                  gy, gm, gd = d.year, d.month, d.day
+                  a = (14-gm)//12; y = gy+4800-a; m = gm+12*a-3
+                  jdn = gd + (153*m+2)//5 + 365*y + y//4 - y//100 + y//400 - 32045
+                  l = jdn - 1948440 + 10632; n = (l-1)//10631; l = l - 10631*n + 354
+                  j = ((10985-l)//5316)*((50*l)//17719) + (l//5670)*((43*l)//15238)
+                  l = l - ((30-j)//15)*((17719*j)//50) - (j//16)*((15238*j)//43) + 29
+                  hm = (24*l)//709; hd = l - (709*hm)//24; hy = 30*n + j - 30
+                  mo = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani","Jumada al-Awwal",
+                        "Jumada al-Thani","Rajab","Shaban","Ramadan","Shawwal","Dhul Qadah","Dhul Hijjah"]
+                  return f"{hd} {mo[hm-1] if 1<=hm<=12 else '?'} {hy} AH"
+              except: return ""
+
+          def call_ai(prompt, mx=1000, jm=True):
+              pv = []
+              if os.environ.get("OPENROUTER_API_KEY"):
+                  pv.append(("OpenRouter","https://openrouter.ai/api/v1/chat/completions",
+                      {"Authorization":f"Bearer {os.environ['OPENROUTER_API_KEY']}"},"openai/gpt-4o-mini"))
+              if os.environ.get("GROQ_API_KEY"):
+                  pv.append(("Groq","https://api.groq.com/openai/v1/chat/completions",
+                      {"Authorization":f"Bearer {os.environ['GROQ_API_KEY']}"},"llama-3.3-70b-versatile"))
+              if os.environ.get("GEMINI_API_KEY"):
+                  pv.append(("Gemini", None, None, None))
+              if os.environ.get("CEREBRAS_API_KEY"):
+                  pv.append(("Cerebras","https://api.cerebras.ai/v1/chat/completions",
+                      {"Authorization":f"Bearer {os.environ['CEREBRAS_API_KEY']}"},"llama3.1-8b"))
+              if not pv: return None
+              for name, url, h, model in pv:
+                  try:
+                      if name == "Gemini":
+                          body = {"contents":[{"parts":[{"text":prompt}]}]}
+                          if jm: body["generationConfig"] = {"responseMimeType":"application/json"}
+                          r = session.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={os.environ['GEMINI_API_KEY']}",
+                              json=body, timeout=60)
+                          if r.status_code == 200:
+                              return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                      else:
+                          pl = {"model":model,"messages":[{"role":"user","content":prompt}],
+                                "temperature":0.9,"max_tokens":mx}
+                          if jm: pl["response_format"] = {"type":"json_object"}
+                          r = session.post(url, headers={**h,"Content-Type":"application/json"}, json=pl, timeout=60)
+                          if r.status_code == 200:
+                              return r.json()["choices"][0]["message"]["content"].strip()
+                  except: continue
+              return None
+
+          def parse_json(t):
+              if not t: return None
+              t = re.sub(r'^```(?:json)?\s*','',t.strip())
+              t = re.sub(r'\s*```$','',t.strip())
+              m = re.search(r'\{.*\}', t, re.DOTALL)
+              if not m: return None
+              try: return json.loads(m.group(0))
+              except: return None
+
+          def gen_ai(he):
+              pr = f'''Return ONLY valid JSON for Islamic video:
+          {{"hook":"Hindi curiosity hook 4-6 words","intro":"3-5 word Hindi",
+            "title":"2-3 word English","emotion":"calm|khushu|tawbah|shukr|dhikr",
+            "outro_main":"Fi Amanillah","outro_cta":"3-6 word Hindi CTA",
+            "hashtags":["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"],
+            "color_palette":{{"name":"Gold","primary":[212,175,55],"secondary":[255,220,120],
+              "text":[255,245,220],"accent":[255,200,80],"glow":[255,220,120]}},
+            "bg_queries":["mosque night empty","desert sunrise","islamic pattern"],
+            "ambience_query":"gentle rain nature","engagement_text":"याद रखें","sound_hint_text":"सुनिए"}}
+          Hadith: {he[:300]}'''
+              p = parse_json(call_ai(pr, 1200, True)) or {}
+              def sf(k, d=""): return sanitize(p.get(k,"")) or d
+              hk = sf("hook","क्या आप जानते हैं?")
+              hk = add_prophet(add_allah(hk))
+              it = sf("intro"); it = add_prophet(add_allah(it))
+              if it and not it.endswith("।") and not it.endswith("?"): it += "।"
+              em = str(p.get("emotion","calm")).lower().strip()
+              if em not in ["calm","khushu","tawbah","shukr","dhikr"]: em = "calm"
+              pal = val_pal(p.get("color_palette", {}))
+              bq = []
+              for q in p.get("bg_queries", [])[:3]:
+                  v = val_bg(q)
+                  if v: bq.append(v)
+              if not bq: bq = random.sample(SAFE_BG, 3)
+              tags = val_tags(p.get("hashtags", []))
+              if not tags: tags = ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
+              return {"hook": hk, "intro": it, "title": sf("title","Hadith"),
+                      "emotion": em, "outro_main": sf("outro_main","Fi Amanillah"),
+                      "outro_cta": sf("outro_cta","इस हदीस को शेयर करें।"),
+                      "hashtags": tags, "palette": pal, "bg_queries": bq,
+                      "ambience_query": val_amb(p.get("ambience_query","")) or "gentle rain nature",
+                      "engagement_text": sf("engagement_text","याद रखें"),
+                      "sound_hint_text": sf("sound_hint_text","सुनिए")}
+
+          def deepl(text):
+              k = os.environ.get("DEEPL_API_KEY")
+              if not k: return None
+              try:
+                  r = session.post("https://api-free.deepl.com/v2/translate",
+                      headers={"Authorization":f"DeepL-Auth-Key {k}"},
+                      data={"text":text, "target_lang":"HI"}, timeout=25)
+                  if r.status_code == 200:
+                      R["plat"]["trans"] = "DeepL"
+                      return r.json()["translations"][0]["text"]
+              except: pass
+              return None
+
+          def ck(p, m=3000): return os.path.exists(p) and os.path.getsize(p) > m
+
+          def tts_edge(text, out):
+              for v in ["hi-IN-MadhurNeural","ur-IN-SalmanNeural"]:
+                  try:
+                      tmp = out + ".txt"
+                      with open(tmp, "w", encoding="utf-8") as f: f.write(text)
+                      if os.path.exists(out): os.remove(out)
+                      subprocess.run(f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-10% --pitch=-2Hz',
+                                     shell=True, check=True, timeout=120)
+                      if os.path.exists(tmp): os.remove(tmp)
+                      if ck(out): return True, v
+                  except: continue
+              return False, "fail"
+
+          def tts_piper(text, out):
+              m = os.path.join(PIPER_DIR, "hi_IN-pratham-medium.onnx")
+              if not os.path.exists(m): return False, "no model"
+              try:
+                  tmp = out + ".wav"
+                  subprocess.run(f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.08',
+                                 shell=True, check=True, timeout=90)
+                  if os.path.exists(tmp) and os.path.getsize(tmp) > 5000:
+                      run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
+                      os.remove(tmp)
+                      if ck(out): return True, "piper"
+              except: pass
+              return False, "fail"
+
+          def gen_tts(text, out):
+              text = sanitize(text)
+              if not text: return False
+              for name, fn in [("edge", tts_edge), ("piper", tts_piper)]:
+                  if os.path.exists(out):
+                      try: os.remove(out)
+                      except: pass
+                  try:
+                      ok, det = fn(text, out)
+                      if ok and ck(out):
+                          R["plat"]["tts"] = name
+                          return True
+                  except: pass
+              return False
+
+          def proc_voice(inp, out):
+              f = ",".join(["highpass=f=100","lowpass=f=11000",
+                  "equalizer=f=250:width_type=h:width=150:g=2",
+                  "equalizer=f=3000:width_type=h:width=600:g=2",
+                  "acompressor=threshold=-20dB:ratio=4:attack=5:release=150",
+                  "dynaudnorm=f=200:g=15:p=0.9","loudnorm=I=-14:TP=-1.0:LRA=9","volume=1.30"])
+              run(f'ffmpeg -y -i "{inp}" -af "{f}" "{out}"')
+
+          def get_amb(q):
+              q = val_amb(q) or "rain nature"
+              fs = os.environ.get("FREESOUND_API_KEY")
+              if fs:
+                  try:
+                      r = session.get("https://freesound.org/apiv2/search/text/",
+                          params={"query":q,"filter":"duration:[25 TO 160] type:mp3",
+                                  "fields":"id,name,previews","page_size":5,"token":fs}, timeout=14)
+                      if r.status_code == 200 and r.json().get("results"):
+                          for s in r.json()["results"]:
+                              p = s.get("previews",{}).get("preview-hq-mp3")
+                              if p and dl(p, "amb_raw.mp3"):
+                                  run('ffmpeg -y -i amb_raw.mp3 -af "volume=0.14,afade=t=in:st=0:d=3,afade=t=out:st=100:d=10" -t 120 ambience.mp3')
+                                  R["plat"]["ambience"] = "Freesound"
+                                  return
+                  except: pass
+              run('ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 60 -c:a libmp3lame -b:a 128k ambience.mp3')
+              R["plat"]["ambience"] = "Silent"
+
+          MIXKIT = [
+              "https://assets.mixkit.co/videos/preview/mixkit-night-sky-with-stars-in-time-lapse-1222-large.mp4",
+              "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4",
+          ]
+
+          def get_bg(queries, dur):
+              DK = "eq=contrast=1.10:brightness=0.02:saturation=1.12,vignette=PI/5"
+              clips = []
+              pk = os.environ.get("PEXELS_API_KEY")
+              if pk:
+                  for q in queries:
+                      try:
+                          r = session.get(f"https://api.pexels.com/videos/search?query={q}&orientation=portrait&per_page=4",
+                              headers={"Authorization":pk}, timeout=14)
+                          if r.status_code == 200 and r.json().get("videos"):
+                              v = random.choice(r.json()["videos"])
+                              fs = sorted(v.get("video_files",[]), key=lambda x: x.get("width",0), reverse=True)
+                              if fs and dl(fs[0]["link"], f"tmp_{len(clips)}.mp4"):
+                                  clips.append(f"tmp_{len(clips)}.mp4")
+                                  if len(clips) >= 2: break
+                      except: continue
+              if not clips:
+                  for i, u in enumerate(MIXKIT):
+                      if dl(u, f"tmp_mix_{i}.mp4"): clips.append(f"tmp_mix_{i}.mp4"); break
+              if not clips:
+                  log_err("BG failed"); send_report("FAILED","BG failed"); sys.exit(1)
+              d_e = dur / len(clips)
+              for i, c in enumerate(clips):
+                  run(f'ffmpeg -y -stream_loop -1 -i {c} -vf "'
+                      f'scale=1200:2140:force_original_aspect_ratio=increase,crop=1080:1920,'
+                      f"zoompan=z='min(zoom+0.0004,1.06)':d=1:"
+                      f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                      f'setsar=1,{DK}" -t {d_e:.2f} -an -c:v libx264 -preset veryfast -crf 18 bg_{i}.mp4')
+              if len(clips) >= 2:
+                  with open("bgl.txt","w") as f:
+                      for i in range(len(clips)): f.write(f"file 'bg_{i}.mp4'\n")
+                  run('ffmpeg -y -f concat -safe 0 -i bgl.txt -c copy bg.mp4')
+                  R["plat"]["bg"] = "Multi"
+              else:
+                  os.rename("bg_0.mp4", "bg.mp4")
+                  R["plat"]["bg"] = "Single"
+              return "bg.mp4"
+
+          def upload_drive(path, prefix):
+              try:
+                  creds = Credentials(None,
+                      refresh_token=os.environ.get("GOOGLE_DRIVE_REFRESH_TOKEN"),
+                      client_id=os.environ.get("GOOGLE_DRIVE_CLIENT_ID"),
+                      client_secret=os.environ.get("GOOGLE_DRIVE_CLIENT_SECRET"),
+                      token_uri="https://oauth2.googleapis.com/token")
+                  svc = build("drive","v3",credentials=creds,cache_discovery=False)
+                  meta = {"name": f"{prefix}_{int(time.time())}.mp4"}
+                  fid = os.environ.get("DRIVE_STORY_FOLDER_ID")
+                  if fid: meta["parents"] = [fid]
+                  up = svc.files().create(body=meta,
+                      media_body=MediaFileUpload(path,mimetype="video/mp4",resumable=True),
+                      fields="id").execute()
+                  did = up.get("id")
+                  svc.permissions().create(fileId=did, body={"type":"anyone","role":"reader"}).execute()
+                  link = f"https://drive.google.com/file/d/{did}/view"
+                  R["drive"] = {"status":"ok","link":link}
+                  return link
+              except Exception as e:
+                  R["drive"] = {"status": f"fail ({str(e)[:80]})"}
+                  return None
+
+          def fetch_hadith():
+              bases = ["https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1",
+                       "https://raw.githubusercontent.com/fawazahmed0/hadith-api/1"]
+              recent = []
+              try:
+                  if os.path.exists("recent.json"):
+                      with open("recent.json") as f: recent = json.load(f)
+              except: pass
+              for att in range(30):
+                  book = random.choice(BOOKS)
+                  num = random.randint(1, max(1, book["max"]-50))
+                  k = f"{book['eng']}:{num}"
+                  if k in recent[-30:]: continue
+                  for base in bases:
+                      try:
+                          r = session.get(f"{base}/editions/{book['eng']}/{num}.json", timeout=12)
+                          if r.status_code != 200: continue
+                          hs = r.json().get("hadiths", [])
+                          if not hs: continue
+                          eng = sanitize(hs[0].get("text",""))
+                          if not (150 <= len(eng) <= 700): continue
+                          ara = ""
+                          try:
+                              ar = session.get(f"{base}/editions/{book['ara']}/{num}.json", timeout=10)
+                              if ar.status_code == 200:
+                                  ad = ar.json().get("hadiths", [])
+                                  if ad: ara = sanitize(ad[0].get("text",""))
+                          except: pass
+                          recent.append(k); recent = recent[-50:]
+                          try:
+                              with open("recent.json","w") as f: json.dump(recent, f)
+                          except: pass
+                          R["hadith"] = {"collection": book["name"], "number": str(hs[0].get("hadithnumber") or num),
+                                         "english": eng, "arabic": ara, "chars": len(eng)}
+                          R["plat"]["hadith"] = f"fawazahmed0/{book['eng']}"
+                          return R["hadith"]
+                      except: continue
+              R["hadith"] = {"collection":"Sahih al-Bukhari","number":"1",
+                             "english":"The reward of deeds depends upon the intentions.",
+                             "arabic":"إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ","chars":60}
+              return R["hadith"]
+
+          def islamic_pattern(img, op=0.05):
+              try:
+                  p = Image.new("RGBA",(W,H),(0,0,0,0)); pd = ImageDraw.Draw(p)
+                  gold = (212,175,55,int(255*op))
+                  for x in range(0,W,120):
+                      for y in range(0,H,120):
+                          pd.polygon([(x,y-30),(x+30,y),(x,y+30),(x-30,y)], outline=gold)
+                  return Image.alpha_composite(img,p)
+              except: return img
+
+          def border(img, pal):
+              try:
+                  b = Image.new("RGBA",(W,H),(0,0,0,0)); bd = ImageDraw.Draw(b)
+                  bd.rectangle([6,6,W-6,H-6], outline=tuple(pal["primary"])+(200,), width=4)
+                  bd.rectangle([14,14,W-14,H-14], outline=tuple(pal["glow"])+(80,), width=1)
+                  return Image.alpha_composite(img,b)
+              except: return img
+
+          def prog_dots(img, prog, pal, cnt=9):
+              try:
+                  l = Image.new("RGBA",(W,H),(0,0,0,0)); ld = ImageDraw.Draw(l)
+                  tw = cnt*22; sx = (W-tw)//2; y = H-42
+                  for i in range(cnt):
+                      cx = sx+i*22+8
+                      if (i/cnt) < prog:
+                          ld.ellipse([cx-7,y-7,cx+7,y+7], fill=tuple(pal["accent"])+(255,))
+                      else:
+                          ld.ellipse([cx-5,y-5,cx+5,y+5], fill=(80,65,40,160))
+                  return Image.alpha_composite(img,l)
+              except: return img
+
+          def ref_card(img, coll, num, hj, pal):
+              try:
+                  if not coll and not num: return img
+                  c = Image.new("RGBA",(W,H),(0,0,0,0)); cd = ImageDraw.Draw(c)
+                  fn = _pick_font(coll, "NotoSans-Bold.ttf")
+                  fs = get_font(fn, 22); fxs = get_font("NotoSans-Regular.ttf", 18)
+                  cw, ch, cx, cy = 400, 88, W-430, 30
+                  cd.rounded_rectangle([cx,cy,cx+cw,cy+ch], radius=12, fill=(15,10,5,235),
+                                        outline=tuple(pal["primary"])+(255,), width=2)
+                  cd.text((cx+15,cy+12), _trunc(cd,coll,fs,cw-30,"la"), fill=tuple(pal["glow"])+(255,), font=fs)
+                  cd.text((cx+15,cy+42), f"#{num}", fill=tuple(pal["text"])+(220,), font=fxs)
+                  if hj:
+                      cd.text((cx+15,cy+64), _trunc(cd,hj,fxs,cw-30,"la"), fill=tuple(pal["secondary"])+(220,), font=fxs)
+                  return Image.alpha_composite(img,c)
+              except: return img
+
+          def title_chip(img, title, pal):
+              try:
+                  if not title: return img
+                  c = Image.new("RGBA",(W,H),(0,0,0,0)); cd = ImageDraw.Draw(c)
+                  fn = _pick_font(title, "NotoSans-Bold.ttf")
+                  fnt = get_font(fn, 26)
+                  text = f"* {title}"
+                  bb = cd.textbbox((0,0), text, font=fnt)
+                  cw = min((bb[2]-bb[0])+40, W-400)
+                  cd.rounded_rectangle([30,30,30+cw,82], radius=26, fill=(15,10,5,235),
+                                        outline=tuple(pal["primary"])+(255,), width=2)
+                  cd.text((50,43), text, fill=tuple(pal["glow"])+(255,), font=fnt)
+                  return Image.alpha_composite(img,c)
+              except: return img
+
+          def sound_hint(img, a, pal, txt):
+              try:
+                  if a <= 0: return img
+                  l = Image.new("RGBA",(W,H),(0,0,0,0)); ld = ImageDraw.Draw(l)
+                  fn = _pick_font(txt, "NotoSans-Bold.ttf")
+                  font = get_font(fn, 32)
+                  cx, cy = W-150, 240
+                  for dx,dy in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                      ld.text((cx+dx,cy+dy), txt, fill=(0,0,0,int(180*a)), font=font, anchor="mm")
+                  ld.text((cx,cy), txt, fill=tuple(pal["glow"])+(int(240*a),), font=font, anchor="mm")
+                  r,g,b,al = l.split(); al = al.point(lambda p: int(p*a)); l.putalpha(al)
+                  return Image.alpha_composite(img,l)
+              except: return img
+
+          def apply_emotion(img, em):
+              try:
+                  oa = img.split()[3]; rgb = img.convert("RGB")
+                  if em == "tawbah":
+                      rgb = ImageEnhance.Color(rgb).enhance(0.88)
+                      rgb = Image.blend(rgb, Image.new("RGB",rgb.size,(0,0,40)), 0.10)
+                  elif em == "shukr":
+                      rgb = ImageEnhance.Color(rgb).enhance(1.10)
+                  elif em == "khushu":
+                      rgb = ImageEnhance.Color(rgb).enhance(0.92)
+                      rgb = Image.blend(rgb, Image.new("RGB",rgb.size,(30,20,40)), 0.08)
+                  r = rgb.convert("RGBA"); r.putalpha(oa); return r
+              except: return img
+
+          def build_msg(status="COMPLETED", note=""):
+              dur = int(time.time()-RUN_START)
+              L = ["ISLAMIC HADITH STORY", "=============="]
+              L.append(f"STATUS: {status}")
+              if note: L.append(f"Note: {note}")
+              L.append(f"Time: {dur//60}m {dur%60}s")
+              L.append("PLATFORMS:")
+              for k, v in R["plat"].items(): L.append(f"  {k}: {v}")
+              if R["fonts"]:
+                  L.append("FONTS:")
+                  for k in list(R["fonts"].keys())[:6]: L.append(f"  OK {k}")
+              if _FONT_MISSING: L.append(f"  MISSING: {list(_FONT_MISSING)[:4]}")
+              h = R["hadith"]
+              if h: L.append(f"HADITH: {h.get('collection','')} #{h.get('number','')}")
+              if R["video"]: L.append(f"VIDEO: {R['video'].get('duration','')}s")
+              if R["drive"]:
+                  L.append(f"DRIVE: {R['drive'].get('status','')}")
+                  if R["drive"].get("link"): L.append(f"  {R['drive']['link']}")
+              if R["warnings"]:
+                  L.append("WARNINGS:")
+                  for w in R["warnings"][:5]: L.append(f"  {w}")
+              if R["errors"]:
+                  L.append("ERRORS:")
+                  for e in R["errors"][:5]: L.append(f"  {e}")
+              return "\n".join(L)[:3900]
+
+          def send_report(status="COMPLETED", note=""):
+              msg = build_msg(status, note)
+              print("="*60); print(msg); print("="*60)
+              if TG_TOKEN and TG_CHAT_ID:
+                  try:
+                      session.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
+                          json={"chat_id":TG_CHAT_ID,"text":msg}, timeout=20)
+                  except: pass
+
+          def main():
+              print("Starting...")
+              for fname, sz in {"NotoSans-Bold.ttf":48,"NotoSans-Regular.ttf":32,
+                  "NotoSansDevanagari-Bold.ttf":68,"NotoSansDevanagari-Regular.ttf":48,
+                  "NotoNaskhArabic-Bold.ttf":72,"NotoNaskhArabic-Regular.ttf":48}.items():
+                  get_font(fname, sz)
+              R["fonts"] = dict(_FONT_LOADED)
+
+              h = fetch_hadith()
+              if not h.get("english"):
+                  send_report("FAILED","Hadith"); sys.exit(1)
+
+              hindi = deepl(h["english"]) or call_ai(f"Is English Hadith ka natural Hindi tarjuma likho:\n\n{h['english']}", task="hindi") or h["english"]
+              hindi = sanitize(re.sub(r"^```.*?```","",hindi,flags=re.DOTALL))
+              hindi = add_prophet(add_allah(hindi))
+
+              aic = gen_ai(h["english"])
+              R["aic"] = aic
+              palette = aic["palette"]
+              R["es"]["palette"] = palette.get("name","custom")
+
+              tts_text = f"{aic.get('intro','')} {hindi}".strip()
+              if not gen_tts(tts_text, "s_raw.mp3"):
+                  send_report("FAILED","TTS"); sys.exit(1)
+
+              proc_voice("s_raw.mp3", "s_clean.mp3")
+              vdur = MP3("s_clean.mp3").info.length
+              if vdur < VOICE_MIN:
+                  run(f'ffmpeg -y -i s_clean.mp3 -af "apad=pad_dur={VOICE_MIN-vdur:.2f}" s_v.mp3')
+                  vdur = MP3("s_v.mp3").info.length
+              elif vdur > VOICE_MAX:
+                  ex = min(vdur/VOICE_MAX, 1.15)
+                  run(f'ffmpeg -y -i s_clean.mp3 -af "atempo={ex:.4f}" s_v.mp3')
+                  vdur = MP3("s_v.mp3").info.length
+              else:
+                  os.replace("s_clean.mp3", "s_v.mp3")
+
+              get_amb(aic.get("ambience_query","rain nature"))
+              fade = max(vdur - 3.0, 1.0)
+              mix = (f"[0:a]volume=1.6,acompressor=threshold=-20dB:ratio=4:attack=5:release=150,"
+                     f"dynaudnorm=f=200:g=15:p=0.9,loudnorm=I=-14:TP=-1.0:LRA=9[v];"
+                     f"[1:a]volume=0.14,afade=t=in:st=0:d=3,afade=t=out:st={fade:.2f}:d=4[a];"
+                     f"[v]asplit=2[vm][vs];"
+                     f"[a][vs]sidechaincompress=threshold=0.05:ratio=8:attack=10:release=400[ad];"
+                     f"[vm][ad]amix=inputs=2:duration=first:dropout_transition=2[o]")
+              run(f'ffmpeg -y -i s_v.mp3 -i ambience.mp3 -filter_complex "{mix}" -map "[o]" -c:a libmp3lame -b:a 192k s_voice.mp3')
+
+              bg = get_bg(aic.get("bg_queries", SAFE_BG[:3]), vdur + INTRO_SEC + OUTRO_SEC)
+              hj = hijri()
+              intro, outro = INTRO_SEC, OUTRO_SEC
+              total = min(intro + vdur + outro, 65.0)
+              os.makedirs("story_frames", exist_ok=True)
+
+              F = {"big": get_font("NotoSans-Bold.ttf", 78), "s": get_font("NotoSans-Bold.ttf", 48),
+                   "tiny": get_font("NotoSans-Regular.ttf", 32),
+                   "hook": get_font("NotoSansDevanagari-Bold.ttf", 82),
+                   "hi": get_font("NotoSansDevanagari-Bold.ttf", 68),
+                   "ar": get_font("NotoNaskhArabic-Bold.ttf", 72),
+                   "en": get_font("NotoSans-Bold.ttf", 58),
+                   "bism": get_font("NotoNaskhArabic-Bold.ttf", 54),
+                   "ameen": get_font("NotoNaskhArabic-Bold.ttf", 68)}
+
+              fps = FPS
+              tf = int(total * fps)
+              GS = {"dots": 0}
+              hw = sanitize(hindi).split()
+              aw = sanitize_ar(h.get("arabic","")).split()
+              ew = sanitize(h.get("english","")).split()
+              mw = max(len(hw), len(aw), len(ew))
+              wd = vdur / max(1, mw)
+
+              for fi in range(tf):
+                  t = fi / fps
+                  prog = fi / tf
+                  img = Image.new("RGBA",(W,H),(0,0,0,0))
+                  d = ImageDraw.Draw(img)
+                  if t < intro:
+                      mt = t
+                      if mt < 0.8:
+                          ba = int(255*min(1.0,mt/0.3))
+                          try:
+                              bb = d.textbbox((0,0), BISMILLAH_ARABIC, font=F["bism"])
+                              d.text((W//2-(bb[2]-bb[0])//2, int(H*0.18)), BISMILLAH_ARABIC,
+                                     fill=tuple(palette["glow"])+(ba,), font=F["bism"])
+                          except: pass
+                      if aic["hook"]:
+                          part = reveal(aic["hook"], mt-0.3, 0.25)
+                          if part:
+                              try: d.text((W//2, int(H*0.45)), part,
+                                          fill=tuple(palette["text"])+(255,), font=F["hook"], anchor="mm")
+                              except: pass
+                      ba = int(220*min(1.0,mt/0.5))
+                      d.text((W//2, int(H*0.68)), BRAND_NAME, fill=tuple(palette["primary"])+(ba,), font=F["s"], anchor="mm")
+                  elif t < intro + vdur:
+                      mt = t - intro
+                      wi = int(mt / wd)
+                      for wl in [hw, aw, ew]:
+                          if wi < len(wl): GS["dots"] += 1
+                      img = draw_vstack(img, hw, aw, ew, wi, palette, F)
+                      d = ImageDraw.Draw(img)
+                  else:
+                      ot = t - (intro + vdur)
+                      if aic["outro_main"]:
+                          try: d.text((W//2, int(H*0.34)), aic["outro_main"],
+                                      fill=tuple(palette["text"])+(255,), font=F["big"], anchor="mm")
+                          except: pass
+                      if aic["outro_cta"]:
+                          try: d.text((W//2, int(H*0.44)), aic["outro_cta"],
+                                      fill=tuple(palette["text"])+(255,), font=F["s"], anchor="mm")
+                          except: pass
+                      d.text((W//2, int(H*0.52)), BRAND_HANDLE, fill=tuple(palette["primary"])+(255,), font=F["tiny"], anchor="mm")
+                      tg = "  ".join(aic["hashtags"][:4])
+                      if tg: d.text((W//2, int(H*0.78)), tg, fill=tuple(palette["secondary"])+(220,), font=F["tiny"], anchor="mm")
+                      if ot >= outro - 1.2:
+                          aa = int(255*min(1.0,(ot-(outro-1.2))/0.6))
+                          try:
+                              bb = d.textbbox((0,0), AMEEN_ARABIC, font=F["ameen"])
+                              d.text((W//2-(bb[2]-bb[0])//2, int(H*0.90)), AMEEN_ARABIC,
+                                     fill=tuple(palette["glow"])+(aa,), font=F["ameen"])
+                          except: pass
+                  img = islamic_pattern(img, 0.05)
+                  if t >= intro*0.5:
+                      img = ref_card(img, h["collection"], h["number"], hj, palette)
+                  if intro <= t < intro + vdur and aic["title"]:
+                      img = title_chip(img, aic["title"], palette)
+                  if 2.0 < t < 3.0:
+                      ha = min(1.0, (t-2.0)/0.3) * (1 - (t-2.0)/1.0)
+                      img = sound_hint(img, ha, palette, aic["sound_hint_text"])
+                  img = prog_dots(img, prog, palette)
+                  img = border(img, palette)
+                  img = apply_emotion(img, aic["emotion"])
+                  img.save(f"story_frames/frame_{fi:05d}.png")
+
+              R["es"]["dots"] = GS["dots"]
+              final = "Final_FB_Story.mp4"
+              run(f'ffmpeg -y -i {bg} -framerate {fps} -i story_frames/frame_%05d.png -i s_voice.mp3 '
+                  f'-filter_complex "[0:v][1:v]overlay=0:0:shortest=1,eq=contrast=1.08:brightness=0.02:'
+                  f'saturation=1.12,vignette=PI/6,format=yuv420p[outv]" -map "[outv]" -map 2:a '
+                  f'-c:v libx264 -preset veryfast -crf 17 -b:v 7M -c:a aac -b:a 192k '
+                  f'-t {total:.2f} -movflags +faststart {final}')
+              sz = os.path.getsize(final)/1024/1024
+              R["video"] = {"duration": f"{total:.2f}", "size": f"{sz:.2f}"}
+
+              drive_link = upload_drive(final, "Hadith_Story")
+
+              if META_TOKEN and should_post_social:
+                  pt = META_TOKEN
+                  pid = os.environ.get("FACEBOOK_PAGE_ID","").strip()
+                  r = {"status": "initiated"}
+                  try:
+                      if pid:
+                          pt_resp = session.get(f"https://graph.facebook.com/v21.0/{pid}",
+                              params={"fields":"access_token","access_token":pt}, timeout=15).json()
+                          pta = pt_resp.get("access_token", pt)
+                          fs = os.path.getsize(final)
+                          s = session.post(f"https://graph.facebook.com/v21.0/{pid}/video_stories",
+                              data={"upload_phase":"start","file_size":fs,"access_token":pta}, timeout=30).json()
+                          if not s.get("error"):
+                              vid, vurl = s.get("video_id"), s.get("upload_url")
+                              if vid and vurl:
+                                  with open(final,"rb") as f:
+                                      session.post(vurl, headers={"Authorization":f"OAuth {pta}",
+                                          "offset":"0","file_size":str(fs)}, data=f.read(), timeout=180)
+                                  fin = session.post(f"https://graph.facebook.com/v21.0/{pid}/video_stories",
+                                      data={"upload_phase":"finish","video_id":vid,"access_token":pta}, timeout=30).json()
+                                  r["status"] = "ok" if (fin.get("success") or fin.get("post_id")) else "fail"
+                      else: r["status"] = "no page id"
+                  except Exception as e: r["status"] = f"fail: {str(e)[:60]}"
+                  R["fb"] = r
+              else:
+                  R["fb"] = {"status": "skipped"}
+
+              for f in ["s_raw.mp3","s_clean.mp3","s_v.mp3","s_voice.mp3","amb_raw.mp3","bgl.txt"]:
+                  if os.path.exists(f):
+                      try: os.remove(f)
+                      except: pass
+              for i in range(5):
+                  for f in [f"tmp_{i}.mp4", f"bg_{i}.mp4", f"tmp_mix_{i}.mp4"]:
+                      if os.path.exists(f):
+                          try: os.remove(f)
+                          except: pass
+              shutil.rmtree("story_frames", ignore_errors=True)
+
+              status = "COMPLETED" if not R["errors"] else "PARTIAL"
+              send_report(status)
+              print("Done.")
+
+          if __name__ == "__main__":
+              try:
+                  main()
+              except SystemExit:
+                  raise
+              except Exception as e:
+                  print(traceback.format_exc())
+                  log_err(f"Fatal: {str(e)[:150]}")
+                  try: send_report("FAILED", f"{str(e)[:120]}")
+                  except: pass
+                  sys.exit(1)
+          PYEOF
+
+          echo "Script written: $(wc -l < $DEPS_DIR/scripts/story.py) lines"
+          python3 "$DEPS_DIR/scripts/story.py"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -416,15 +1116,8 @@ PYEOF
           retention-days: 5
           if-no-files-found: ignore
 
-      - name: Cleanup Public Repo
+      - name: Cleanup
         if: always()
         run: |
-          rm -rf "Social media"
           rm -f Final_FB_Story.mp4
-
-      - name: Cache Status
-        if: always()
-        run: |
           echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
-          du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
-          ls -1 $DEPS_DIR/libs 2>/dev/null | wc -l
