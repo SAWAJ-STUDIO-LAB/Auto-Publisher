@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v22
+      CACHE_VERSION: v23
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -100,20 +100,17 @@ jobs:
 
       - name: Download Custom Fonts (Auto-Heal)
         run: |
-          # ✅ हर run पर font integrity check
           NEED_DOWNLOAD=0
           for f in NotoSans-Regular.ttf NotoSans-Bold.ttf \
                    NotoSansDevanagari-Regular.ttf NotoSansDevanagari-Bold.ttf \
                    NotoNaskhArabic-Regular.ttf NotoNaskhArabic-Bold.ttf; do
             P="$DEPS_DIR/fonts/$f"
             if [ ! -f "$P" ] || [ "$(stat -c%s "$P" 2>/dev/null || echo 0)" -lt 50000 ]; then
-              echo "MISSING/BAD: $f"
               NEED_DOWNLOAD=1
             fi
           done
 
           if [ $NEED_DOWNLOAD -eq 1 ]; then
-            echo "Re-downloading all fonts"
             rm -rf "$DEPS_DIR/fonts"
             mkdir -p "$DEPS_DIR/fonts"
             declare -A FONTS=(
@@ -130,11 +127,8 @@ jobs:
                 sleep 2
               done
             done
-          else
-            echo "Fonts CACHED and OK"
           fi
 
-          # ✅ Hard verify — कोई भी missing तो रुको
           MISSING=0
           for f in NotoSans-Regular.ttf NotoSans-Bold.ttf \
                    NotoSansDevanagari-Regular.ttf NotoSansDevanagari-Bold.ttf \
@@ -142,16 +136,13 @@ jobs:
             P="$DEPS_DIR/fonts/$f"
             SZ=$(stat -c%s "$P" 2>/dev/null || echo 0)
             if [ "$SZ" -gt 50000 ]; then
-              echo "OK: $f ($SZ bytes)"
+              echo "OK: $f"
             else
               echo "FAIL: $f"
               MISSING=$((MISSING+1))
             fi
           done
-          if [ $MISSING -gt 0 ]; then
-            echo "CRITICAL: $MISSING fonts missing"
-            exit 1
-          fi
+          [ $MISSING -gt 0 ] && exit 1
 
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
@@ -240,8 +231,7 @@ jobs:
                                (str(os.environ.get("UPLOAD_TO_SOCIAL","")).lower() == "true")
           RUN_START = time.time()
           FPS, INTRO_SEC, OUTRO_SEC, W, H = 25, 3.5, 5.0, 1080, 1920
-          VOICE_MIN, VOICE_MAX = 30.0, 60.0
-          TEXT_Y_POSITION = 0.75
+          TEXT_Y_POSITION = 0.72
 
           BRAND_NAME = "SAWAJ STUDIO"
           BRAND_HANDLE = "@SawajStudio"
@@ -334,18 +324,6 @@ jobs:
               _FONT_CACHE[key] = fb
               return fb
 
-          def _trunc(d, text, font, mx, anchor="lm"):
-              if not text: return text
-              try:
-                  bb = d.textbbox((0,0), text, font=font, anchor=anchor)
-                  if (bb[2]-bb[0]) <= mx: return text
-                  for c in range(len(text)-1, 0, -1):
-                      t = text[:c] + ".."
-                      b2 = d.textbbox((0,0), t, font=font, anchor=anchor)
-                      if (b2[2]-b2[0]) <= mx: return t
-                  return text[:1] + ".."
-              except: return text
-
           def sanitize(t):
               if not t: return ""
               t = re.sub(r'[\u200b-\u200f\ufeff\u202a-\u202e]', '', str(t))
@@ -356,39 +334,128 @@ jobs:
               if not t: return ""
               return re.sub(r'[\u200b-\u200e\ufeff\u202a-\u202e]', '', str(t)).replace('\n',' ').strip()
 
-          def reveal(full, el, rate=0.28):
-              ws = sanitize(full).split()
-              if not ws: return ""
-              return " ".join(ws[:max(0,min(len(ws),int(el/rate)+1))])
+          # ═════════════════════════════════════════════════════════════
+          # ✅ TEXT WRAPPING — multi-line support
+          # ═════════════════════════════════════════════════════════════
+          def wrap_text(text, font, max_w, draw):
+              """Text को multiple lines में तोड़ो"""
+              words = text.split()
+              lines = []
+              cur = ""
+              for w in words:
+                  trial = (cur + " " + w).strip()
+                  try:
+                      bb = draw.textbbox((0,0), trial, font=font)
+                      if (bb[2]-bb[0]) <= max_w:
+                          cur = trial
+                      else:
+                          if cur: lines.append(cur)
+                          cur = w
+                  except:
+                      cur = trial
+              if cur: lines.append(cur)
+              return lines if lines else [text]
 
-          def draw_vstack(img, hi_w, ar_w, en_w, hi_i, ar_i, en_i, pal, fonts):
+          def draw_sentence_block(img, hi_txt, ar_txt, en_txt, pal, fonts,
+                                   y_center=None):
+              """
+              ✅ Sentence-based 3-line block
+              • Hindi line (top)
+              • Arabic line (middle)  
+              • English line (bottom)
+              हर line multi-line हो सकती है अगर लंबी है
+              """
               try:
                   d = ImageDraw.Draw(img)
-                  ch = hi_w[hi_i] if hi_i < len(hi_w) else ""
-                  ca = ar_w[ar_i] if ar_i < len(ar_w) else ""
-                  ce = en_w[en_i] if en_i < len(en_w) else ""
-                  if not (ch or ca or ce): return img
-                  lh = 115
-                  sy = int(H*TEXT_Y_POSITION) - (3*lh)//2
-                  dr = 16; dx = int(W*0.12); wx = dx + dr + 25
-                  mw = W - wx - 40
-                  rows = [(ch,fonts["hi"],sy,"hi"),(ca,fonts["ar"],sy+lh,"ar"),
-                          (ce,fonts["en"],sy+2*lh,"en")]
-                  for word, font, y, lg in rows:
-                      if not word: continue
+                  if y_center is None:
+                      y_center = int(H * TEXT_Y_POSITION)
+
+                  # Layout constants
+                  max_text_w = int(W * 0.84)
+                  line_gap = 20       # same-language multi-line gap
+                  lang_gap = 60       # different language gap
+                  dot_r = 14
+                  dot_x = int(W * 0.06)
+                  text_x = dot_x + dot_r + 22
+
+                  # ✅ हर language को wrap करो
+                  hi_lines = wrap_text(hi_txt, fonts["hi"], max_text_w, d) if hi_txt else []
+                  ar_lines = wrap_text(ar_txt, fonts["ar"], max_text_w, d) if ar_txt else []
+                  en_lines = wrap_text(en_txt, fonts["en"], max_text_w, d) if en_txt else []
+
+                  # हर line की height estimate करो
+                  def line_h(font):
                       try:
-                          tb = d.textbbox((0,0), word, font=font)
-                          if tb is None or (tb[2]-tb[0]) <= 0: continue
-                      except: continue
-                      color = color_for_word(word)
-                      d.ellipse([dx-dr,y-dr,dx+dr,y+dr], fill=color+(255,))
-                      ws = _trunc(d, word, font, mw, "lm")
-                      for ax,ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
-                          d.text((wx+ax,y+ay), ws, fill=(0,0,0,200), font=font, anchor="lm")
-                      d.text((wx,y), ws, fill=tuple(pal["text"])+(255,), font=font, anchor="lm")
+                          bb = d.textbbox((0,0), "A", font=font)
+                          return bb[3] - bb[1] + 6
+                      except: return 70
+
+                  hi_h = line_h(fonts["hi"]) * len(hi_lines) if hi_lines else 0
+                  ar_h = line_h(fonts["ar"]) * len(ar_lines) if ar_lines else 0
+                  en_h = line_h(fonts["en"]) * len(en_lines) if en_lines else 0
+
+                  gaps = 0
+                  if hi_lines and ar_lines: gaps += lang_gap
+                  if ar_lines and en_lines: gaps += lang_gap
+                  if hi_lines and en_lines and not ar_lines: gaps += lang_gap
+                  if hi_lines and en_lines and ar_lines: pass
+
+                  total_h = hi_h + ar_h + en_h + gaps
+
+                  # Start y
+                  y = y_center - total_h // 2
+
+                  # ─── Hindi block ───
+                  for i, line in enumerate(hi_lines):
+                      cy = y + i * line_h(fonts["hi"]) + line_h(fonts["hi"]) // 2
+                      if i == 0:
+                          color = color_for_word(hi_txt[:20] if hi_txt else "hi")
+                          d.ellipse([dot_x-dot_r, cy-dot_r, dot_x+dot_r, cy+dot_r],
+                                    fill=color + (255,))
+                      for ax, ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                          d.text((text_x+ax, cy+ay), line, fill=(0,0,0,220),
+                                 font=fonts["hi"], anchor="lm")
+                      d.text((text_x, cy), line,
+                             fill=tuple(pal["text"])+(255,),
+                             font=fonts["hi"], anchor="lm")
+                  y += hi_h
+
+                  if hi_lines and ar_lines: y += lang_gap
+
+                  # ─── Arabic block ───
+                  for i, line in enumerate(ar_lines):
+                      cy = y + i * line_h(fonts["ar"]) + line_h(fonts["ar"]) // 2
+                      if i == 0:
+                          color = color_for_word(ar_txt[:20] if ar_txt else "ar")
+                          d.ellipse([dot_x-dot_r, cy-dot_r, dot_x+dot_r, cy+dot_r],
+                                    fill=color + (255,))
+                      for ax, ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                          d.text((text_x+ax, cy+ay), line, fill=(0,0,0,220),
+                                 font=fonts["ar"], anchor="lm")
+                      d.text((text_x, cy), line,
+                             fill=tuple(pal["text"])+(255,),
+                             font=fonts["ar"], anchor="lm")
+                  y += ar_h
+
+                  if ar_lines and en_lines: y += lang_gap
+
+                  # ─── English block ───
+                  for i, line in enumerate(en_lines):
+                      cy = y + i * line_h(fonts["en"]) + line_h(fonts["en"]) // 2
+                      if i == 0:
+                          color = color_for_word(en_txt[:20] if en_txt else "en")
+                          d.ellipse([dot_x-dot_r, cy-dot_r, dot_x+dot_r, cy+dot_r],
+                                    fill=color + (255,))
+                      for ax, ay in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+                          d.text((text_x+ax, cy+ay), line, fill=(0,0,0,220),
+                                 font=fonts["en"], anchor="lm")
+                      d.text((text_x, cy), line,
+                             fill=tuple(pal["text"])+(255,),
+                             font=fonts["en"], anchor="lm")
+
                   return img
               except Exception as e:
-                  print(f"[STACK] {e}"); return img
+                  print(f"[BLOCK] {e}"); return img
 
           MUSIC_BLOCK = ["piano","guitar","violin","drum","tabla","flute","oud","ney","harp",
                          "melody","song","music","instrument","beat","edm","jazz","rock",
@@ -488,7 +555,7 @@ jobs:
                   return f"{hd} {mo[hm-1] if 1<=hm<=12 else '?'} {hy} AH"
               except: return ""
 
-          def call_ai(prompt, mx=1000, jm=True):
+          def call_ai(prompt, mx=2000, jm=True):
               pv = []
               if os.environ.get("OPENROUTER_API_KEY"):
                   pv.append(("OpenRouter","https://openrouter.ai/api/v1/chat/completions",
@@ -508,15 +575,15 @@ jobs:
                           body = {"contents":[{"parts":[{"text":prompt}]}]}
                           if jm: body["generationConfig"] = {"responseMimeType":"application/json"}
                           r = session.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={os.environ['GEMINI_API_KEY']}",
-                              json=body, timeout=60)
+                              json=body, timeout=90)
                           if r.status_code == 200:
                               return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                       else:
                           pl = {"model":model,"messages":[{"role":"user","content":prompt}],
-                                "temperature":0.9,"max_tokens":mx}
+                                "temperature":0.7,"max_tokens":mx}
                           if jm: pl["response_format"] = {"type":"json_object"}
                           r = session.post(url, headers={**h,"Content-Type":"application/json"},
-                              json=pl, timeout=60)
+                              json=pl, timeout=90)
                           if r.status_code == 200:
                               return r.json()["choices"][0]["message"]["content"].strip()
                   except: continue
@@ -531,23 +598,96 @@ jobs:
               try: return json.loads(m.group(0))
               except: return None
 
-          def gen_ai(he):
-              pr = f'''Return ONLY valid JSON for Islamic video:
-          {{"hook":"Hindi curiosity hook 4-6 words","intro":"3-5 word Hindi",
-            "title":"2-3 word English","emotion":"calm|khushu|tawbah|shukr|dhikr",
-            "outro_main":"Fi Amanillah","outro_cta":"3-6 word Hindi CTA",
-            "hashtags":["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"],
-            "color_palette":{{"name":"Gold","primary":[212,175,55],"secondary":[255,220,120],
-              "text":[255,245,220],"accent":[255,200,80],"glow":[255,220,120]}},
-            "bg_queries":["mosque night empty","desert sunrise","islamic pattern"],
-            "ambience_query":"gentle rain nature","engagement_text":"याद रखें","sound_hint_text":"सुनिए"}}
-          Hadith: {he[:300]}'''
-              p = parse_json(call_ai(pr, 1200, True)) or {}
+          # ═════════════════════════════════════════════════════════════
+          # ✅ AI PROMPT — sentence-wise 3-language output
+          # ═════════════════════════════════════════════════════════════
+          def gen_ai(he, ha):
+              pr = f'''You are an Islamic short-video script writer.
+
+You will get a Hadith in English and Arabic. Your job is to break it
+into SENTENCES (2 to 4 sentences max) and give 3 language versions
+of EACH sentence.
+
+RULES:
+- Hindi must be natural conversational Hindi in Devanagari
+- Arabic must be the original Arabic text (same sentence)
+- English must be the original English translation (same sentence)
+- Each sentence should be SHORT (max 12 words) so it fits on screen
+- If the hadith is long, split into 2-3 short sentences
+- Keep Islamic respect: "ﷺ" after Prophet, "अल्लाह तआला" for Allah
+
+Hadith English: "{he}"
+Hadith Arabic: "{ha}"
+
+Return ONLY valid JSON in this EXACT format:
+
+{{
+  "hook": "Hindi curiosity hook, 4-6 words, ends with ?",
+  "intro": "3-5 word Hindi opening, ends with ।",
+  "title": "2-3 word English title",
+  "emotion": "calm",
+  "sentences": [
+    {{
+      "hindi": "पहला वाक्य हिंदी में।",
+      "arabic": "الْجُمْلَةُ الأُولَى بِالْعَرَبِيَّةِ",
+      "english": "First sentence in English."
+    }},
+    {{
+      "hindi": "दूसरा वाक्य हिंदी में।",
+      "arabic": "الْجُمْلَةُ الثَّانِيَةُ",
+      "english": "Second sentence in English."
+    }}
+  ],
+  "outro_main": "Fi Amanillah",
+  "outro_cta": "3-6 word Hindi CTA",
+  "hashtags": ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"],
+  "color_palette": {{
+    "name": "Royal Gold",
+    "primary": [212,175,55],
+    "secondary": [255,220,120],
+    "text": [255,245,220],
+    "accent": [255,200,80],
+    "glow": [255,220,120]
+  }},
+  "bg_queries": ["mosque night empty","desert sunrise","islamic pattern"],
+  "ambience_query": "gentle rain nature",
+  "engagement_text": "याद रखें",
+  "sound_hint_text": "सुनिए"
+}}
+
+Return ONLY the JSON. No explanation. No markdown.'''
+
+              p = parse_json(call_ai(pr, 2500, True))
+              if not p:
+                  p = {}
               def sf(k, d=""): return sanitize(p.get(k,"")) or d
+
+              # Sentences validate करो
+              sentences = []
+              for s in p.get("sentences", []):
+                  if not isinstance(s, dict): continue
+                  hi = sanitize(s.get("hindi",""))
+                  ar = sanitize_ar(s.get("arabic",""))
+                  en = sanitize(s.get("english",""))
+                  if hi or ar or en:
+                      if hi: hi = add_prophet(add_allah(hi))
+                      sentences.append({"hi": hi, "ar": ar, "en": en})
+
+              # Fallback — अगर AI ने sentences नहीं दिए
+              if not sentences:
+                  hi_fb = add_prophet(add_allah(sanitize(he[:200])))
+                  sentences = [{
+                      "hi": hi_fb,
+                      "ar": sanitize_ar(ha[:200]),
+                      "en": sanitize(he[:200])
+                  }]
+
               hk = sf("hook","क्या आप जानते हैं?")
               hk = add_prophet(add_allah(hk))
-              it = sf("intro"); it = add_prophet(add_allah(it))
+              it = sf("intro")
+              it = add_prophet(add_allah(it))
               if it and not it.endswith("।") and not it.endswith("?"): it += "।"
+
               em = str(p.get("emotion","calm")).lower().strip()
               if em not in ["calm","khushu","tawbah","shukr","dhikr"]: em = "calm"
               pal = val_pal(p.get("color_palette",{}))
@@ -558,13 +698,17 @@ jobs:
               if not bq: bq = random.sample(SAFE_BG, 3)
               tags = val_tags(p.get("hashtags",[]))
               if not tags: tags = ["#Hadith","#Sunnah","#Islam","#Quran","#SawajStudio"]
-              return {"hook":hk,"intro":it,"title":sf("title","Hadith"),
-                      "emotion":em,"outro_main":sf("outro_main","Fi Amanillah"),
-                      "outro_cta":sf("outro_cta","इस हदीस को शेयर करें।"),
-                      "hashtags":tags,"palette":pal,"bg_queries":bq,
-                      "ambience_query":val_amb(p.get("ambience_query","")) or "gentle rain nature",
-                      "engagement_text":sf("engagement_text","याद रखें"),
-                      "sound_hint_text":sf("sound_hint_text","सुनिए")}
+
+              return {
+                  "hook": hk, "intro": it, "title": sf("title","Hadith"),
+                  "emotion": em, "sentences": sentences,
+                  "outro_main": sf("outro_main","Fi Amanillah"),
+                  "outro_cta": sf("outro_cta","इस हदीस को शेयर करें।"),
+                  "hashtags": tags, "palette": pal, "bg_queries": bq,
+                  "ambience_query": val_amb(p.get("ambience_query","")) or "gentle rain nature",
+                  "engagement_text": sf("engagement_text","याद रखें"),
+                  "sound_hint_text": sf("sound_hint_text","सुनिए")
+              }
 
           def deepl(text):
               k = os.environ.get("DEEPL_API_KEY")
@@ -587,8 +731,8 @@ jobs:
                       tmp = out + ".txt"
                       with open(tmp,"w",encoding="utf-8") as f: f.write(text)
                       if os.path.exists(out): os.remove(out)
-                      subprocess.run(f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-15% --pitch=-2Hz',
-                                     shell=True, check=True, timeout=120)
+                      subprocess.run(f'edge-tts --file "{tmp}" --write-media "{out}" --voice {v} --rate=-10% --pitch=-2Hz',
+                                     shell=True, check=True, timeout=180)
                       if os.path.exists(tmp): os.remove(tmp)
                       if ck(out): return True, v
                   except: continue
@@ -599,8 +743,8 @@ jobs:
               if not os.path.exists(m): return False, "no model"
               try:
                   tmp = out + ".wav"
-                  subprocess.run(f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.25',
-                                 shell=True, check=True, timeout=90)
+                  subprocess.run(f'echo "{text}" | piper --model "{m}" --output_file "{tmp}" --length_scale 1.15',
+                                 shell=True, check=True, timeout=120)
                   if os.path.exists(tmp) and os.path.getsize(tmp) > 5000:
                       run(f'ffmpeg -y -i "{tmp}" -c:a libmp3lame -b:a 128k "{out}"')
                       os.remove(tmp)
@@ -736,13 +880,13 @@ jobs:
                           hs = r.json().get("hadiths", [])
                           if not hs: continue
                           eng = sanitize(hs[0].get("text",""))
-                          if not (100 <= len(eng) <= 500): continue
+                          if not (100 <= len(eng) <= 600): continue
                           ara = ""
                           try:
                               ar = session.get(f"{base}/editions/{book['ara']}/{num}.json", timeout=10)
                               if ar.status_code == 200:
                                   ad = ar.json().get("hadiths", [])
-                                  if ad: ara = sanitize(ad[0].get("text",""))
+                                  if ad: ara = sanitize_ar(ad[0].get("text",""))
                           except: pass
                           recent.append(k); recent = recent[-50:]
                           try:
@@ -798,9 +942,9 @@ jobs:
                   cw, ch, cx, cy = 400, 88, W-430, 30
                   cd.rounded_rectangle([cx,cy,cx+cw,cy+ch], radius=12, fill=(15,10,5,235),
                                         outline=tuple(pal["primary"])+(255,), width=2)
-                  cd.text((cx+15,cy+12), _trunc(cd,coll,fs,cw-30,"la"), fill=tuple(pal["glow"])+(255,), font=fs)
+                  cd.text((cx+15,cy+12), coll[:30], fill=tuple(pal["glow"])+(255,), font=fs)
                   cd.text((cx+15,cy+42), f"#{num}", fill=tuple(pal["text"])+(220,), font=fxs)
-                  if hj: cd.text((cx+15,cy+64), _trunc(cd,hj,fxs,cw-30,"la"), fill=tuple(pal["secondary"])+(220,), font=fxs)
+                  if hj: cd.text((cx+15,cy+64), hj[:30], fill=tuple(pal["secondary"])+(220,), font=fxs)
                   return Image.alpha_composite(img,c)
               except: return img
 
@@ -856,7 +1000,7 @@ jobs:
               L.append("PLATFORMS:")
               for k,v in R["plat"].items(): L.append(f"  {k}: {v}")
               if R["sync"]:
-                  L.append("SYNC:")
+                  L.append("SYNC (sentence-wise):")
                   for k,v in R["sync"].items(): L.append(f"  {k}: {v}")
               if R["fonts"]:
                   L.append("FONTS:")
@@ -886,10 +1030,10 @@ jobs:
                   except: pass
 
           def main():
-              print("Starting v22 - sentence-based sync...")
+              print("Starting v23 - sentence-wise 3-language sync...")
               for fname, sz in {"NotoSans-Bold.ttf":48,"NotoSans-Regular.ttf":32,
-                  "NotoSansDevanagari-Bold.ttf":68,"NotoSansDevanagari-Regular.ttf":48,
-                  "NotoNaskhArabic-Bold.ttf":72,"NotoNaskhArabic-Regular.ttf":48}.items():
+                  "NotoSansDevanagari-Bold.ttf":62,"NotoSansDevanagari-Regular.ttf":48,
+                  "NotoNaskhArabic-Bold.ttf":62,"NotoNaskhArabic-Regular.ttf":48}.items():
                   get_font(fname, sz)
               R["fonts"] = dict(_FONT_LOADED)
 
@@ -897,57 +1041,72 @@ jobs:
               if not h.get("english"):
                   send_report("FAILED","Hadith"); sys.exit(1)
 
-              hindi = deepl(h["english"]) or call_ai(
-                  f"Is English Hadith ka natural Hindi tarjuma likho:\n\n{h['english']}",
-                  task="hindi") or h["english"]
-              hindi = sanitize(re.sub(r"^```.*?```","",hindi,flags=re.DOTALL))
-              hindi = add_prophet(add_allah(hindi))
-
-              aic = gen_ai(h["english"])
+              # ═══════════════════════════════════════════════════════════
+              # ✅ AI से sentence-wise 3-language output लो
+              # ═══════════════════════════════════════════════════════════
+              aic = gen_ai(h["english"], h.get("arabic",""))
               R["aic"] = aic
               palette = aic["palette"]
               R["es"]["palette"] = palette.get("name","custom")
 
+              sentences = aic["sentences"]
+              print(f"[AI] {len(sentences)} sentences generated")
+              for i, s in enumerate(sentences):
+                  print(f"  [{i+1}] HI: {s['hi'][:60]}...")
+                  print(f"      AR: {s['ar'][:40]}...")
+                  print(f"      EN: {s['en'][:60]}...")
+
               # ═══════════════════════════════════════════════════════════
-              # ✅ KEY FIX: Voice और Typing SAME TEXT
-              # Voice सिर्फ़ Hindi बोलती है, इसलिए typing भी Hindi को
-              # voice के साथ align करो — Arabic/English को भी उसी
-              # timeline पर proportionally distribute करो
+              # ✅ VOICE = पूरी Hindi script (intro + सब sentences + outro CTA)
               # ═══════════════════════════════════════════════════════════
-              voice_text = f"{aic.get('intro','')} {hindi}".strip()
+              hindi_parts = [aic["intro"]] + [s["hi"] for s in sentences if s["hi"]]
+              voice_text = " ".join([p for p in hindi_parts if p]).strip()
+              print(f"[VOICE] {voice_text[:120]}...")
+
               if not gen_tts(voice_text, "s_raw.mp3"):
                   send_report("FAILED","TTS"); sys.exit(1)
 
               proc_voice("s_raw.mp3", "s_clean.mp3")
               vdur = MP3("s_clean.mp3").info.length
-              print(f"[AUDIO] voice = {vdur:.2f}s")
+              print(f"[AUDIO] voice duration = {vdur:.2f}s")
 
-              # ✅ Words निकालो
-              hi_words = sanitize(hindi).split()
-              ar_words = sanitize_ar(h.get("arabic","")).split()
-              en_words = sanitize(h.get("english","")).split()
+              # ═══════════════════════════════════════════════════════════
+              # ✅ SYNC — हर sentence को voice duration के proportionally divide
+              # Character count के हिसाब से हर sentence का time
+              # ═══════════════════════════════════════════════════════════
+              # Intro और Sentences के बीच
+              # Total characters = intro + all sentences + outro (outro silent)
+              intro_chars = len(aic["intro"])
+              sent_chars = [len(s["hi"]) for s in sentences]
+              total_chars = intro_chars + sum(sent_chars)
+              if total_chars == 0: total_chars = 1
 
-              n_hi, n_ar, n_en = max(1,len(hi_words)), max(1,len(ar_words)), max(1,len(en_words))
+              # हर segment को time assign
+              intro_dur = vdur * (intro_chars / total_chars)
+              sent_durs = [vdur * (c / total_chars) for c in sent_chars]
 
-              # ✅ हर language की speed word-length के हिसाब से
-              # Hindi = ज़्यादा words (translation), English = कम (original)
-              # सब को voice के साथ finish होना चाहिए
+              # Minimum sentence duration = 1.8s (ताकि पढ़ सकें)
+              MIN_SENT_DUR = 1.8
+              # अगर कोई sentence छोटा पड़ा तो बढ़ाओ
+              for i in range(len(sent_durs)):
+                  if sent_durs[i] < MIN_SENT_DUR:
+                      sent_durs[i] = MIN_SENT_DUR
 
-              # Hindi rate = voice duration / Hindi word count
-              # लेकिन minimum 0.55s प्रति word (readability के लिए)
-              MIN_DUR = 0.55
-              dur_hi = max(vdur / n_hi, MIN_DUR)
-              dur_ar = max(vdur / n_ar, MIN_DUR)
-              dur_en = max(vdur / n_en, MIN_DUR)
+              # ✅ Cumulative timeline
+              timeline = []  # (start_time, end_time, type, data)
+              t_cursor = intro_dur
+              for i, s in enumerate(sentences):
+                  timeline.append({
+                      "start": t_cursor,
+                      "end": t_cursor + sent_durs[i],
+                      "sent": s
+                  })
+                  t_cursor += sent_durs[i]
 
-              # जो सबसे slow layer है उसकी speed के हिसाब से पूरा video length
-              slowest_needed = max(n_hi * dur_hi, n_ar * dur_ar, n_en * dur_en)
-              print(f"[SYNC] hi:{n_hi}@{dur_hi:.3f}s | ar:{n_ar}@{dur_ar:.3f}s | "
-                    f"en:{n_en}@{dur_en:.3f}s | slowest={slowest_needed:.2f}s | voice={vdur:.2f}s")
-
-              # अगर voice बहुत छोटी है → voice को extend करो silence से
-              if slowest_needed > vdur + 0.3:
-                  extra = slowest_needed - vdur + 0.3
+              # अगर sentence time voice से ज़्यादा हो → voice extend करो
+              needed_voice = t_cursor
+              if needed_voice > vdur:
+                  extra = needed_voice - vdur + 0.3
                   print(f"[SYNC] Extending voice by {extra:.2f}s")
                   run(f'ffmpeg -y -i s_clean.mp3 -af "apad=pad_dur={extra:.2f}" s_v.mp3')
                   vdur = MP3("s_v.mp3").info.length
@@ -955,11 +1114,17 @@ jobs:
                   os.replace("s_clean.mp3", "s_v.mp3")
 
               R["sync"] = {
-                  "hi_words": n_hi, "ar_words": n_ar, "en_words": n_en,
-                  "dur_hi": f"{dur_hi:.3f}s", "dur_ar": f"{dur_ar:.3f}s", "dur_en": f"{dur_en:.3f}s",
+                  "total_sentences": len(sentences),
+                  "intro_dur": f"{intro_dur:.2f}s",
                   "voice_final": f"{vdur:.2f}s",
+                  "sent_durs": ", ".join([f"{d:.2f}s" for d in sent_durs])
               }
+              print(f"[SYNC] {len(sentences)} sentences, voice={vdur:.2f}s")
+              print(f"[SYNC] sentence durations: {R['sync']['sent_durs']}")
 
+              # ═══════════════════════════════════════════════════════════
+              # Audio mix
+              # ═══════════════════════════════════════════════════════════
               get_amb(aic.get("ambience_query","rain nature"))
               fade = max(vdur - 3.0, 1.0)
               mix = (f"[0:a]volume=1.6,acompressor=threshold=-20dB:ratio=4:attack=5:release=150,"
@@ -973,15 +1138,17 @@ jobs:
               bg = get_bg(aic.get("bg_queries", SAFE_BG[:3]), vdur + INTRO_SEC + OUTRO_SEC)
               hj = hijri()
               intro, outro = INTRO_SEC, OUTRO_SEC
-              total = min(intro + vdur + outro, 75.0)
+              total = min(intro + vdur + outro, 85.0)
               os.makedirs("story_frames", exist_ok=True)
 
-              F = {"big": get_font("NotoSans-Bold.ttf", 78), "s": get_font("NotoSans-Bold.ttf", 48),
-                   "tiny": get_font("NotoSans-Regular.ttf", 32),
-                   "hook": get_font("NotoSansDevanagari-Bold.ttf", 82),
-                   "hi": get_font("NotoSansDevanagari-Bold.ttf", 68),
-                   "ar": get_font("NotoNaskhArabic-Bold.ttf", 72),
-                   "en": get_font("NotoSans-Bold.ttf", 58),
+              # ✅ Fonts (smaller for 3-line layout)
+              F = {"big": get_font("NotoSans-Bold.ttf", 68),
+                   "s": get_font("NotoSans-Bold.ttf", 44),
+                   "tiny": get_font("NotoSans-Regular.ttf", 30),
+                   "hook": get_font("NotoSansDevanagari-Bold.ttf", 76),
+                   "hi": get_font("NotoSansDevanagari-Bold.ttf", 56),
+                   "ar": get_font("NotoNaskhArabic-Bold.ttf", 58),
+                   "en": get_font("NotoSans-Bold.ttf", 48),
                    "bism": get_font("NotoNaskhArabic-Bold.ttf", 54),
                    "ameen": get_font("NotoNaskhArabic-Bold.ttf", 68)}
 
@@ -990,13 +1157,15 @@ jobs:
               GS = {"dots": 0}
 
               # ═══════════════════════════════════════════════════════════
-              # ✅ FRAME LOOP — independent index
+              # ✅ FRAME LOOP — sentence-based display
               # ═══════════════════════════════════════════════════════════
               for fi in range(tf):
                   t = fi / fps
                   prog = fi / tf
                   img = Image.new("RGBA",(W,H),(0,0,0,0))
                   d = ImageDraw.Draw(img)
+
+                  # ─── INTRO ───
                   if t < intro:
                       mt = t
                       if mt < 0.8:
@@ -1007,22 +1176,42 @@ jobs:
                                      fill=tuple(palette["glow"])+(ba,), font=F["bism"])
                           except: pass
                       if aic["hook"]:
-                          part = reveal(aic["hook"], mt-0.3, 0.30)
-                          if part:
-                              try: d.text((W//2, int(H*0.45)), part,
-                                          fill=tuple(palette["text"])+(255,), font=F["hook"], anchor="mm")
+                          part = wrap_text(aic["hook"], F["hook"], int(W*0.85), d)
+                          ptext = " ".join(part[:2])
+                          show_chars = int((mt-0.3) / 0.04)
+                          ptext = ptext[:show_chars] if show_chars > 0 else ""
+                          if ptext:
+                              try:
+                                  d.text((W//2, int(H*0.45)), ptext,
+                                         fill=tuple(palette["text"])+(255,),
+                                         font=F["hook"], anchor="mm")
                               except: pass
                       ba = int(220*min(1.0,mt/0.5))
-                      d.text((W//2, int(H*0.68)), BRAND_NAME, fill=tuple(palette["primary"])+(ba,), font=F["s"], anchor="mm")
+                      d.text((W//2, int(H*0.68)), BRAND_NAME,
+                             fill=tuple(palette["primary"])+(ba,), font=F["s"], anchor="mm")
+
+                  # ─── SENTENCES (main) ───
                   elif t < intro + vdur:
                       mt = t - intro
-                      hi_i = min(int(mt / dur_hi), n_hi - 1) if mt > 0 else 0
-                      ar_i = min(int(mt / dur_ar), n_ar - 1) if mt > 0 else 0
-                      en_i = min(int(mt / dur_en), n_en - 1) if mt > 0 else 0
-                      for wl, idx in [(hi_words,hi_i),(ar_words,ar_i),(en_words,en_i)]:
-                          if idx < len(wl): GS["dots"] += 1
-                      img = draw_vstack(img, hi_words, ar_words, en_words, hi_i, ar_i, en_i, palette, F)
-                      d = ImageDraw.Draw(img)
+                      # Current sentence ढूंढो
+                      cur = None
+                      for seg in timeline:
+                          if seg["start"] <= mt < seg["end"]:
+                              cur = seg["sent"]; break
+                      # अगर last sentence से आगे → last hold करो
+                      if cur is None and timeline:
+                          cur = timeline[-1]["sent"]
+
+                      if cur:
+                          # Dots count
+                          if cur["hi"]: GS["dots"] += 1
+                          if cur["ar"]: GS["dots"] += 1
+                          if cur["en"]: GS["dots"] += 1
+                          img = draw_sentence_block(img,
+                              cur["hi"], cur["ar"], cur["en"],
+                              palette, F)
+
+                  # ─── OUTRO ───
                   else:
                       ot = t - (intro + vdur)
                       if aic["outro_main"]:
@@ -1033,9 +1222,11 @@ jobs:
                           try: d.text((W//2, int(H*0.44)), aic["outro_cta"],
                                       fill=tuple(palette["text"])+(255,), font=F["s"], anchor="mm")
                           except: pass
-                      d.text((W//2, int(H*0.52)), BRAND_HANDLE, fill=tuple(palette["primary"])+(255,), font=F["tiny"], anchor="mm")
+                      d.text((W//2, int(H*0.52)), BRAND_HANDLE,
+                             fill=tuple(palette["primary"])+(255,), font=F["tiny"], anchor="mm")
                       tg = "  ".join(aic["hashtags"][:4])
-                      if tg: d.text((W//2, int(H*0.78)), tg, fill=tuple(palette["secondary"])+(220,), font=F["tiny"], anchor="mm")
+                      if tg: d.text((W//2, int(H*0.78)), tg,
+                                    fill=tuple(palette["secondary"])+(220,), font=F["tiny"], anchor="mm")
                       if ot >= outro - 1.2:
                           aa = int(255*min(1.0,(ot-(outro-1.2))/0.6))
                           try:
@@ -1043,6 +1234,7 @@ jobs:
                               d.text((W//2-(bb[2]-bb[0])//2, int(H*0.90)), AMEEN_ARABIC,
                                      fill=tuple(palette["glow"])+(aa,), font=F["ameen"])
                           except: pass
+
                   img = islamic_pattern(img, 0.05)
                   if t >= intro*0.5:
                       img = ref_card(img, h["collection"], h["number"], hj, palette)
