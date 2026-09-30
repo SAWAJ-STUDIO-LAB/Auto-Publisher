@@ -1,0 +1,113 @@
+name: Generate Folder Structure
+
+on:
+  workflow_dispatch: # Actions tab se manual run karne ke liye
+
+jobs:
+  build-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+
+      - name: Generate All Directories and Files
+        run: |
+          # 1. Create Github Workflows Directory
+          mkdir -p .github/workflows
+          
+          # 2. Create Workflow Placeholders
+          workflows=(
+            "facebook_story_01.yml"
+            "facebook_short_02.yml"
+            "facebook_long_03.yml"
+            "instagram_story_04.yml"
+            "instagram_short_05.yml"
+            "instagram_long_06.yml"
+            "youtube_short_07.yml"
+            "youtube_long_08.yml"
+            "youtube_video_09.yml"
+          )
+          for wf in "${workflows[@]}"; do
+            touch ".github/workflows/$wf"
+          done
+
+          # 3. Create Root Social Media Directory
+          mkdir -p social_media
+          touch social_media/__init__.py
+
+          # 4. Modules Definition (Module_Name : Type : Extra_Shared_Files)
+          modules=(
+            "sawajstudio_facebook_story_01:story:stickers.py"
+            "sawajstudio_facebook_short_02:short:hashtags.py cover.py"
+            "sawajstudio_facebook_long_03:long:thumbnail.py chapters.py"
+            "sawajstudio_instagram_story_04:story:stickers.py"
+            "sawajstudio_instagram_short_05:short:hashtags.py cover.py"
+            "sawajstudio_instagram_long_06:long:thumbnail.py hashtags.py"
+            "sawajstudio_youtube_short_07:short:hashtags.py"
+            "sawajstudio_youtube_long_08:long:thumbnail.py chapters.py seo.py"
+            "sawajstudio_youtube_video_09:video:thumbnail.py chapters.py seo.py playlist.py"
+          )
+
+          # Common shared files present in all modules
+          common_shared=(
+            "config.py" "logger.py" "session.py" "telegram.py" "utils.py"
+            "hadith.py" "ai_provider.py" "translator.py" "tts.py" "music.py"
+            "background.py" "logo.py" "subtitles.py" "frames.py" "composer.py"
+          )
+
+          # 5. Build Each Module Structure
+          for mod in "${modules[@]}"; do
+            IFS=':' read -r mod_name type extra_shared <<< "$mod"
+            base="social_media/$mod_name"
+
+            # Create Directories
+            mkdir -p "$base/assets/logos" "$base/assets/fonts" "$base/assets/music"
+            mkdir -p "$base/pipelines" "$base/uploaders" "$base/runners"
+            mkdir -p "$base/shared" "$base/tests" "$base/output/temp" "$base/output/final" "$base/docs"
+
+            # Gitkeep files for empty folders
+            touch "$base/assets/logos/.gitkeep" "$base/assets/fonts/.gitkeep" "$base/assets/music/.gitkeep"
+            touch "$base/output/temp/.gitkeep" "$base/output/final/.gitkeep"
+
+            # Assets subdirectories for specific modules
+            if [[ "$type" == "story" ]]; then mkdir -p "$base/assets/stickers" && touch "$base/assets/stickers/.gitkeep"; fi
+            if [[ "$type" == "short" ]]; then mkdir -p "$base/assets/covers" && touch "$base/assets/covers/.gitkeep"; fi
+            if [[ "$type" == "long" || "$type" == "video" ]]; then mkdir -p "$base/assets/thumbnails" && touch "$base/assets/thumbnails/.gitkeep"; fi
+
+            # Root module files
+            touch "$base/__init__.py" "$base/requirements.txt" "$base/env.example" "$base/.gitignore"
+            touch "$base/.dockerignore" "$base/LICENSE" "$base/README.md" "$base/pyproject.toml" "$base/Makefile"
+
+            # Docs
+            touch "$base/docs/SETUP.md" "$base/docs/ARCHITECTURE.md" "$base/docs/SECRETS.md" "$base/docs/SCHEDULE.md"
+
+            # Pipelines
+            touch "$base/pipelines/__init__.py" "$base/pipelines/base_pipeline.py" "$base/pipelines/${type}_pipeline.py"
+
+            # Uploaders & Runners
+            touch "$base/uploaders/__init__.py" "$base/uploaders/upload_${type}.py"
+            touch "$base/runners/__init__.py" "$base/runners/run_${type}.py"
+
+            # Shared files
+            touch "$base/shared/__init__.py"
+            for s_file in "${common_shared[@]}"; do
+              touch "$base/shared/$s_file"
+            done
+            for ex_file in $extra_shared; do
+              touch "$base/shared/$ex_file"
+            done
+
+            # Tests
+            touch "$base/tests/__init__.py" "$base/tests/conftest.py"
+            touch "$base/tests/test_${type}.py" "$base/tests/test_media.py" "$base/tests/test_render.py"
+          done
+
+      - name: Commit and Push Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: auto-generate complete studio folder structure" || exit 0
+          git push
