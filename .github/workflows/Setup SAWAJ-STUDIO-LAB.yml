@@ -1,0 +1,155 @@
+name: Setup SAWAJ-STUDIO-LAB Architecture
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup-architecture:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Complete Folder Structure and Files
+        run: |
+          echo "1/9 Creating all directories..."
+          mkdir -p .github/workflows
+          mkdir -p src/sawaj_studio/core
+          mkdir -p src/sawaj_studio/fetchers
+          mkdir -p src/sawaj_studio/media
+          mkdir -p src/sawaj_studio/render
+          mkdir -p src/sawaj_studio/upload
+          mkdir -p src/sawaj_studio/pipelines
+          mkdir -p platforms/facebook
+          mkdir -p platforms/instagram
+          mkdir -p platforms/youtube
+          mkdir -p assets/logos
+          mkdir -p assets/fonts
+          mkdir -p assets/music
+          mkdir -p scripts
+          mkdir -p tests
+          mkdir -p output
+          mkdir -p temp
+          mkdir -p docs
+
+          echo "2/9 Creating Root files..."
+          touch .env.example
+          touch .gitignore
+          touch .dockerignore
+          touch LICENSE
+          touch README.md
+          touch pyproject.toml
+          touch requirements.txt
+          touch Makefile
+
+          echo "3/9 Creating Workflow files..."
+          touch .github/workflows/facebook_story.yml
+          touch .github/workflows/facebook_short.yml
+          touch .github/workflows/facebook_long.yml
+          touch .github/workflows/instagram_story.yml
+          touch .github/workflows/instagram_short.yml
+          touch .github/workflows/youtube_short.yml
+          touch .github/workflows/youtube_long.yml
+
+          echo "4/9 Creating Python package structure..."
+          touch src/sawaj_studio/__init__.py
+
+          # Core
+          touch src/sawaj_studio/core/__init__.py
+          touch src/sawaj_studio/core/config.py
+          touch src/sawaj_studio/core/logger.py
+          touch src/sawaj_studio/core/session.py
+          touch src/sawaj_studio/core/telegram.py
+          touch src/sawaj_studio/core/utils.py
+
+          # Fetchers
+          touch src/sawaj_studio/fetchers/__init__.py
+          touch src/sawaj_studio/fetchers/hadith.py
+          touch src/sawaj_studio/fetchers/ai_provider.py
+          touch src/sawaj_studio/fetchers/translator.py
+
+          # Media
+          touch src/sawaj_studio/media/__init__.py
+          touch src/sawaj_studio/media/tts.py
+          touch src/sawaj_studio/media/music.py
+          touch src/sawaj_studio/media/background.py
+
+          # Render
+          touch src/sawaj_studio/render/__init__.py
+          touch src/sawaj_studio/render/logo.py
+          touch src/sawaj_studio/render/subtitles.py
+          touch src/sawaj_studio/render/frames.py
+          touch src/sawaj_studio/render/composer.py
+
+          # Upload
+          touch src/sawaj_studio/upload/__init__.py
+          touch src/sawaj_studio/upload/base.py
+          touch src/sawaj_studio/upload/google_drive.py
+          touch src/sawaj_studio/upload/facebook.py
+          touch src/sawaj_studio/upload/instagram.py
+          touch src/sawaj_studio/upload/youtube.py
+
+          # Pipelines
+          touch src/sawaj_studio/pipelines/__init__.py
+          touch src/sawaj_studio/pipelines/base.py
+          touch src/sawaj_studio/pipelines/story_pipeline.py
+          touch src/sawaj_studio/pipelines/short_pipeline.py
+          touch src/sawaj_studio/pipelines/long_pipeline.py
+
+          echo "5/9 Creating Platform YAML configs..."
+          touch platforms/facebook/story.yaml
+          touch platforms/facebook/short.yaml
+          touch platforms/facebook/long.yaml
+          touch platforms/instagram/story.yaml
+          touch platforms/instagram/short.yaml
+          touch platforms/youtube/short.yaml
+          touch platforms/youtube/long.yaml
+
+          echo "6/9 Creating Asset files..."
+          touch assets/logos/facebook.png
+          touch assets/logos/instagram.png
+          touch assets/logos/youtube.png
+          touch assets/fonts/.gitkeep
+          touch assets/music/.gitkeep
+
+          echo "7/9 Creating Runner Scripts..."
+          touch scripts/run_facebook_story.py
+          touch scripts/run_facebook_short.py
+          touch scripts/run_facebook_long.py
+          touch scripts/run_instagram_story.py
+          touch scripts/run_instagram_short.py
+          touch scripts/run_youtube_short.py
+          touch scripts/run_youtube_long.py
+
+          echo "8/9 Creating Tests & Temp folders..."
+          touch tests/__init__.py
+          touch tests/conftest.py
+          touch tests/test_fetchers.py
+          touch tests/test_media.py
+          touch tests/test_render.py
+          touch output/.gitkeep
+          touch temp/.gitkeep
+
+          echo "9/9 Creating Documentation files..."
+          touch docs/SETUP.md
+          touch docs/ARCHITECTURE.md
+          touch docs/SECRETS.md
+
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Automated: Setup SAWAJ-STUDIO-LAB complete structure"
+            git push
+          fi
