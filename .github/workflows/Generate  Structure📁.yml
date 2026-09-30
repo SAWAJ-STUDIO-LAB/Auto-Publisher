@@ -1,4 +1,4 @@
-name: Generate Folder Structure
+name: 📁Generate Folder Structure
 
 on:
   workflow_dispatch: # Actions tab se manual run karne ke liye
@@ -37,7 +37,7 @@ jobs:
           mkdir -p social_media
           touch social_media/__init__.py
 
-          # 4. Modules Definition (Module_Name : Type : Extra_Shared_Files)
+          # 4. Modules Definition (Module_Name : Type : Extra_Files)
           modules=(
             "sawajstudio_facebook_story_01:story:stickers.py"
             "sawajstudio_facebook_short_02:short:hashtags.py cover.py"
@@ -50,58 +50,43 @@ jobs:
             "sawajstudio_youtube_video_09:video:thumbnail.py chapters.py seo.py playlist.py"
           )
 
-          # Common shared files present in all modules
-          common_shared=(
+          # Common python files present directly in module root
+          common_files=(
             "config.py" "logger.py" "session.py" "telegram.py" "utils.py"
             "hadith.py" "ai_provider.py" "translator.py" "tts.py" "music.py"
-            "background.py" "logo.py" "subtitles.py" "frames.py" "composer.py"
+            "background.py" "logo.py" "subtitles.py" "frames.py" "composer.py" "drive.py"
           )
 
-          # 5. Build Each Module Structure
+          # 5. Build Each Flat Module Structure
           for mod in "${modules[@]}"; do
             IFS=':' read -r mod_name type extra_shared <<< "$mod"
             base="social_media/$mod_name"
 
-            # Create Directories
-            mkdir -p "$base/assets/logos" "$base/assets/fonts" "$base/assets/music"
-            mkdir -p "$base/pipelines" "$base/uploaders" "$base/runners"
-            mkdir -p "$base/shared" "$base/tests" "$base/output/temp" "$base/output/final" "$base/docs"
-
-            # Gitkeep files for empty folders
-            touch "$base/assets/logos/.gitkeep" "$base/assets/fonts/.gitkeep" "$base/assets/music/.gitkeep"
+            # Create Output Directories
+            mkdir -p "$base/output/temp" "$base/output/final"
             touch "$base/output/temp/.gitkeep" "$base/output/final/.gitkeep"
 
-            # Assets subdirectories for specific modules
-            if [[ "$type" == "story" ]]; then mkdir -p "$base/assets/stickers" && touch "$base/assets/stickers/.gitkeep"; fi
-            if [[ "$type" == "short" ]]; then mkdir -p "$base/assets/covers" && touch "$base/assets/covers/.gitkeep"; fi
-            if [[ "$type" == "long" || "$type" == "video" ]]; then mkdir -p "$base/assets/thumbnails" && touch "$base/assets/thumbnails/.gitkeep"; fi
-
-            # Root module files
+            # Root module setup files
             touch "$base/__init__.py" "$base/requirements.txt" "$base/env.example" "$base/.gitignore"
-            touch "$base/.dockerignore" "$base/LICENSE" "$base/README.md" "$base/pyproject.toml" "$base/Makefile"
+            touch "$base/README.md" "$base/Makefile" "$base/pyproject.toml"
 
-            # Docs
-            touch "$base/docs/SETUP.md" "$base/docs/ARCHITECTURE.md" "$base/docs/SECRETS.md" "$base/docs/SCHEDULE.md"
-
-            # Pipelines
-            touch "$base/pipelines/__init__.py" "$base/pipelines/base_pipeline.py" "$base/pipelines/${type}_pipeline.py"
-
-            # Uploaders & Runners
-            touch "$base/uploaders/__init__.py" "$base/uploaders/upload_${type}.py"
-            touch "$base/runners/__init__.py" "$base/runners/run_${type}.py"
-
-            # Shared files
-            touch "$base/shared/__init__.py"
-            for s_file in "${common_shared[@]}"; do
-              touch "$base/shared/$s_file"
+            # Common Python modules (Flat structure)
+            for file in "${common_files[@]}"; do
+              touch "$base/$file"
             done
+
+            # Extra module-specific files
             for ex_file in $extra_shared; do
-              touch "$base/shared/$ex_file"
+              touch "$base/$ex_file"
             done
 
-            # Tests
-            touch "$base/tests/__init__.py" "$base/tests/conftest.py"
-            touch "$base/tests/test_${type}.py" "$base/tests/test_media.py" "$base/tests/test_render.py"
+            # Pipelines, Uploaders, Runners (Flat structure)
+            touch "$base/base_pipeline.py" "$base/${type}_pipeline.py"
+            touch "$base/upload_${type}.py"
+            touch "$base/run_${type}.py"
+
+            # Tests (Flat structure)
+            touch "$base/test_${type}.py" "$base/test_media.py" "$base/test_render.py" "$base/conftest.py"
           done
 
       - name: Commit and Push Changes
@@ -109,5 +94,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "chore: auto-generate complete studio folder structure" || exit 0
+          git commit -m "chore: auto-generate flat studio folder structure" || exit 0
           git push
