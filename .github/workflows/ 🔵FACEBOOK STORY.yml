@@ -1,31 +1,31 @@
-name: "🔵 FACEBOOK STORY GENERATOR"
+name: "🔵 FACEBOOK & INSTAGRAM STORY GENERATOR"
 
 on:
   workflow_dispatch:
     inputs:
       upload_to_social:
-        description: 'Upload to Facebook Story?'
+        description: 'Upload to Facebook & Instagram Story?'
         required: true
         type: boolean
         default: false
   schedule:
-    - cron: '30 23 * * *'
+    - cron: '30 23 * * *' # Daily schedule at 11:30 PM UTC
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: facebook-story
+  group: facebook-instagram-story
   cancel-in-progress: false
 
 jobs:
-  fb-story:
+  fb-ig-story:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     env:
-      CACHE_VERSION: v14
+      CACHE_VERSION: v15
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -57,9 +57,9 @@ jobs:
           path: |
             .dependencies
             ~/.cache/pip
-          key: ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}
+          key: ${{ runner.os }}-fb-ig-story-master-${{ env.CACHE_VERSION }}
           restore-keys: |
-            ${{ runner.os }}-fb-story-master-
+            ${{ runner.os }}-fb-ig-story-master-
 
       - name: 📁 Prepare System Directory
         timeout-minutes: 1
@@ -104,7 +104,7 @@ jobs:
               exit 1
             fi
           done
-          echo "✅ All 7 code files successfully synced!"
+          echo "✅ Saari 7 code files successfully sync ho gayi hain!"
 
       - name: 🐍 Setup Python 3.11
         uses: actions/setup-python@v5
@@ -118,13 +118,15 @@ jobs:
           if ! command -v ffmpeg &> /dev/null; then
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg
+          else
+            echo "✅ FFmpeg pehle se installed hai"
           fi
 
-      - name: 🔤 Setup Noto Fonts
+      - name: 🔤 Setup Noto Fonts (Hindi, Arabic, English)
         timeout-minutes: 5
         run: |
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 3 ]; then
-            echo "✅ Fonts restored from cache"
+            echo "✅ Fonts cache se restore ho gaye"
           else
             mkdir -p "$DEPS_DIR/fonts"
             declare -A FONTS=(
@@ -139,12 +141,12 @@ jobs:
           fi
           echo "FONTS_DIR=$DEPS_DIR/fonts" >> $GITHUB_ENV
 
-      - name: 🐍 Install Dependencies
+      - name: 🐍 Install Python Dependencies
         timeout-minutes: 5
         run: |
           VENV="$DEPS_DIR/python-venv"
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, requests" 2>/dev/null; then
-            echo "✅ Python virtualenv restored"
+            echo "✅ Python virtualenv cache se restore ho gaya"
           else
             rm -rf "$VENV"
             python3 -m venv "$VENV"
@@ -154,7 +156,7 @@ jobs:
           fi
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      - name: 🚀 Run Main Pipeline
+      - name: 🚀 Run Main Pipeline & Story Uploads
         timeout-minutes: 15
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -166,6 +168,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
           DEPS_DIR: ${{ env.DEPS_DIR }}
@@ -173,12 +176,12 @@ jobs:
           cd "Social media/Facebook/Facebook Story"
           python3 MAIN_00.py
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload Video Artifact
         uses: actions/upload-artifact@v4
         timeout-minutes: 5
         if: always()
         with:
-          name: fb-story-video
+          name: fb-ig-story-video
           path: Social media/Facebook/Facebook Story/Final_FB_Story.mp4
           retention-days: 5
           if-no-files-found: ignore
