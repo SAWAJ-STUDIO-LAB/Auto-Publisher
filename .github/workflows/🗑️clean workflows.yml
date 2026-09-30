@@ -1,0 +1,19 @@
+name: 🗑️clean workflows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clear-runs:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete all workflow runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          runs=$(gh api repos/${{ github.repository }}/actions/runs --paginate -q '.workflow_runs[].id')
+          for run_id in $runs; do
+            gh api -X DELETE repos/${{ github.repository }}/actions/runs/$run_id || true
+          done
