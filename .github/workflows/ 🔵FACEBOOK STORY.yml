@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# FACEBOOK STORY AUTOMATION WORKFLOW (UPGRADED)
+# FACEBOOK STORY AUTOMATION WORKFLOW (UPGRADED v8)
 # ─────────────────────────────────────────────────────────────────────────
 # Purpose : Trilingual (Hindi/Arabic/English) Facebook Story video generate
 #           karta hai aur upload karta hai — with FULL Telegram reporting.
@@ -7,56 +7,42 @@
 # Runtime : ~3-4 min (cached) | ~8-10 min (first run)
 # Output  : Final_FB_Story.mp4 + Google Drive link + Facebook Story live
 # ─────────────────────────────────────────────────────────────────────────
-# ARCHITECTURE:
-#   1. Public repo YAML = orchestration (yeh file)
-#   2. Private repo Python = actual logic (00_main.py + 6 modules)
-#   3. Cache = sab dependencies (FFmpeg, Fonts, Piper, Python packages)
-#   4. Telegram = har module ki detailed report + final comprehensive report
+# FIXES IN v8:
+#   1. Shared libraries (libavdevice.so, libsox.so) ab cache mein save hote hain
+#   2. Cache restore ke baad ldconfig chalta hai
+#   3. Cache validation strict hai (libs missing → cache reject)
+#   4. Fresh install ke baad verify hota hai
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ───────────────────────────────────────────────────────────────────────────
-# [SECTION 1] WORKFLOW NAME & TRIGGERS
-# ───────────────────────────────────────────────────────────────────────────
 name: "🔵FACEBOOK STORY"
 
 on:
-  # Manual trigger — GitHub Actions UI se "Run workflow" button
   workflow_dispatch:
     inputs:
       upload_to_social:
         description: 'Upload to Facebook Story?'
         required: true
         type: boolean
-        default: false       # Default: false — safe testing ke liye
+        default: false
 
-  # Auto trigger — roz 23:30 UTC = 5:00 AM IST
   schedule:
     - cron: '30 23 * * *'
 
-# ───────────────────────────────────────────────────────────────────────────
-# [SECTION 2] PERMISSIONS
-# ───────────────────────────────────────────────────────────────────────────
 permissions:
   contents: write
   actions: write
 
-# ───────────────────────────────────────────────────────────────────────────
-# [SECTION 3] CONCURRENCY CONTROL
-# ───────────────────────────────────────────────────────────────────────────
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
-# ───────────────────────────────────────────────────────────────────────────
-# [SECTION 4] JOB DEFINITION
-# ───────────────────────────────────────────────────────────────────────────
 jobs:
   fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     env:
-      CACHE_VERSION: v7
+      CACHE_VERSION: v8
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -87,14 +73,12 @@ jobs:
       # ═════════════════════════════════════════════════════════════════════
       - name: 📁 Prepare Dependencies Folder
         run: |
-          mkdir -p "$DEPS_DIR"/{bin,fonts,models,system-fonts,python-venv,piper,coqui,logs}
+          mkdir -p "$DEPS_DIR"/{bin,fonts,libs,models,system-fonts,python-venv,piper,coqui,logs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
           echo "✅ Deps folder ready: $DEPS_DIR"
 
       # ═════════════════════════════════════════════════════════════════════
-      # [STEP 4] PRIVATE REPO SE CODE FETCH (MULTI-FILE)
-      # ═════════════════════════════════════════════════════════════════════
-      # Saari 7 files copy hoti hain: 00_main.py + 01-06 modules
+      # [STEP 4] PRIVATE REPO SE CODE FETCH
       # ═════════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         env:
@@ -108,13 +92,11 @@ jobs:
           TARGET_DIR="Social media/Facebook/Facebook Story"
           mkdir -p "$TARGET_DIR"
 
-          # Saari Python files copy karo
-          cp temp_private_repo/"$TARGET_DIR/"*.py "$TARGET_DIR/" 2>/dev/null || \
-          cp temp_private_repo/"Social media/Facebook/"*.py "$TARGET_DIR/" 2>/dev/null || true
-
-          # Agar specific path hai toh
-          if [ -d "temp_private_repo/Social media/Facebook/Facebook Story" ]; then
-            cp -r "temp_private_repo/Social media/Facebook/Facebook Story/"* "$TARGET_DIR/"
+          # Try multiple possible paths
+          if [ -d "temp_private_repo/$TARGET_DIR" ]; then
+            cp -r "temp_private_repo/$TARGET_DIR/"* "$TARGET_DIR/"
+          elif [ -d "temp_private_repo/Social media/Facebook" ]; then
+            cp "temp_private_repo/Social media/Facebook/"*.py "$TARGET_DIR/" 2>/dev/null || true
           fi
 
           rm -rf temp_private_repo
@@ -131,53 +113,108 @@ jobs:
           python-version: '3.11'
 
       # ═════════════════════════════════════════════════════════════════════
-      # [STEP 6] FFmpeg + SoX + espeak-ng (CACHE-AWARE)
+      # [STEP 6] FFmpeg + SoX + espeak-ng (CACHE-AWARE — WITH LIBS) ✅ FIXED
       # ═════════════════════════════════════════════════════════════════════
-      - name: 🎬 FFmpeg + System Fonts (Cache-Aware)
+      # FIX: Cache mein sirf binaries nahi, unki shared libraries bhi save karo
+      #      Warna "error while loading shared libraries" aata hai.
+      #
+      # CACHE STRUCTURE:
+      #   $DEPS_DIR/bin/         → ffmpeg, ffprobe, sox, espeak-ng binaries
+      #   $DEPS_DIR/libs/        → libav*.so.*, libsox*.so.*, aur baaki deps
+      #   $DEPS_DIR/system-fonts/truetype/ → system fonts backup
+      #
+      # RESTORE LOGIC:
+      #   libs ko /usr/lib/x86_64-linux-gnu/ mein copy karo + ldconfig chalao
+      # ═════════════════════════════════════════════════════════════════════
+      - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
+          LIBS_DIR="$DEPS_DIR/libs"
 
-          if [ -f "$MARKER" ] && [ -f "$DEPS_DIR/bin/ffmpeg" ] && [ -f "$DEPS_DIR/bin/ffprobe" ] && [ -f "$DEPS_DIR/bin/sox" ]; then
-            echo "⚡ FFmpeg + SoX CACHED — restoring..."
+          # ─── CACHE HIT PATH (only if libs bhi hain) ───
+          if [ -f "$MARKER" ] && \
+             [ -f "$DEPS_DIR/bin/ffmpeg" ] && \
+             [ -f "$DEPS_DIR/bin/sox" ] && \
+             [ -d "$LIBS_DIR" ] && \
+             [ "$(ls -A $LIBS_DIR 2>/dev/null | wc -l)" -gt 5 ]; then
 
+            echo "⚡ FFmpeg + SoX CACHED — restoring binaries + libs..."
+
+            # 1. Binaries restore
             sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
             sudo cp "$DEPS_DIR/bin/sox" /usr/local/bin/sox
             sudo chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/sox
 
-            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
-              sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
-              sudo fc-cache -f > /dev/null 2>&1 || true
-            fi
-
             if [ -f "$DEPS_DIR/bin/espeak-ng" ]; then
               sudo cp "$DEPS_DIR/bin/espeak-ng" /usr/local/bin/espeak-ng
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
 
+            # 2. ✅ Shared libraries restore — YEH MISSING THA!
+            sudo cp -r "$LIBS_DIR/"* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+            sudo ldconfig
+
+            # 3. System fonts restore
+            if [ -d "$DEPS_DIR/system-fonts/truetype" ]; then
+              sudo cp -r "$DEPS_DIR/system-fonts/truetype/"* /usr/share/fonts/truetype/ 2>/dev/null || true
+              sudo fc-cache -f > /dev/null 2>&1 || true
+            fi
+
+            # 4. Safety net — agar koi lib missing hai toh apt se fill karo
+            if ! ffmpeg -version > /dev/null 2>&1 || ! sox --version > /dev/null 2>&1; then
+              echo "⚠️ Cached binaries broken — falling back to apt install..."
+              sudo apt-get update -q
+              sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all
+              sudo ldconfig
+            fi
+
+          # ─── CACHE MISS PATH ───
           else
-            echo "📥 FFmpeg + SoX + espeak-ng install (pehli baar)..."
+            echo "📥 FFmpeg + SoX + espeak-ng install (fresh)..."
 
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
               fonts-noto-ui-core fonts-noto-color-emoji fonts-dejavu-core fontconfig
 
+            # 1. Binaries save
             cp "$(which ffmpeg)" "$DEPS_DIR/bin/ffmpeg"
             cp "$(which ffprobe)" "$DEPS_DIR/bin/ffprobe"
             cp "$(which sox)" "$DEPS_DIR/bin/sox"
             cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
 
+            # 2. ✅ Shared libraries save — YEH NAYA HAI!
+            mkdir -p "$LIBS_DIR"
+            for bin in ffmpeg ffprobe sox espeak-ng; do
+              ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
+                if [ -f "$lib" ]; then
+                  cp -L "$lib" "$LIBS_DIR/" 2>/dev/null || true
+                fi
+              done
+            done
+            echo "📚 Saved $(ls $LIBS_DIR 2>/dev/null | wc -l) libraries to cache"
+
+            # 3. System fonts backup
             mkdir -p "$DEPS_DIR/system-fonts/truetype"
             cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
 
-            touch "$MARKER"
-            echo "✅ FFmpeg + SoX + espeak-ng cached!"
+            # 4. Verify
+            if ffmpeg -version > /dev/null 2>&1 && sox --version > /dev/null 2>&1; then
+              touch "$MARKER"
+              echo "✅ FFmpeg + SoX + libs cached successfully!"
+            else
+              echo "❌ Verification failed — cache NOT saved"
+              exit 1
+            fi
           fi
 
-          ffmpeg -version | head -1
-          sox --version
+          # ─── FINAL VERIFY ───
+          echo "🔍 Verifying tools..."
+          ffmpeg -version | head -1 || (echo "❌ ffmpeg broken" && exit 1)
+          sox --version || (echo "❌ sox broken" && exit 1)
+          echo "✅ All tools working!"
 
       # ═════════════════════════════════════════════════════════════════════
       # [STEP 7] CUSTOM FONTS (CACHE-AWARE)
@@ -285,7 +322,6 @@ jobs:
             echo "[HEALTH] $name → $status ($detail)"
           }
 
-          # Binaries
           if command -v ffmpeg >/dev/null 2>&1; then
             V=$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3)
             add_entry "ffmpeg" "ok" "$V"
@@ -317,7 +353,6 @@ jobs:
             add_entry "piper-cli" "ok" "present"
           else add_entry "piper-cli" "fail" "not found"; fi
 
-          # Models
           if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then
             SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1)
             add_entry "piper-model-pratham" "ok" "$SZ"
@@ -328,19 +363,16 @@ jobs:
             add_entry "piper-model-priyamvada" "ok" "$SZ"
           else add_entry "piper-model-priyamvada" "fail" "missing"; fi
 
-          # Fonts
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
 
           SFC=$(fc-list 2>/dev/null | wc -l)
           add_entry "system-fonts" "ok" "$SFC fonts"
 
-          # Venv
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
             add_entry "python-venv" "ok" "installed"
           else add_entry "python-venv" "fail" "missing"; fi
 
-          # API keys presence
           for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
                      CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
                      ELEVENLABS_API_KEY AZURE_SPEECH_KEY GOOGLE_CLOUD_TTS_KEY \
@@ -362,26 +394,22 @@ jobs:
           cat "$REPORT_FILE"
 
       # ═════════════════════════════════════════════════════════════════════
-      # [STEP 11] MAIN PYTHON PIPELINE (MODULAR — 00_main.py)
+      # [STEP 11] MAIN PYTHON PIPELINE
       # ═════════════════════════════════════════════════════════════════════
       - name: 🚀 Run Facebook Story Pipeline
         env:
-          # ─── Core ───
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
 
-          # ─── Google Drive ───
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
 
-          # ─── Facebook ───
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
 
-          # ─── AI Providers ───
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
@@ -391,12 +419,10 @@ jobs:
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
 
-          # ─── Media Sources ───
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
 
-          # ─── TTS Engines ───
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
@@ -405,14 +431,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
 
-          # ─── Translation ───
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
 
-          # ─── Hadith API ───
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           HADITH_API_KEY: ${{ secrets.HADITH_API_KEY }}
 
-          # ─── Runtime ───
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
