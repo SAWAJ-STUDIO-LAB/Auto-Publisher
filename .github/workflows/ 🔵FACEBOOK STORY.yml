@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '30 23 * * *' # Daily at 11:30 PM UTC
+    - cron: '30 23 * * *'
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
 
     env:
-      CACHE_VERSION: v13
+      CACHE_VERSION: v14
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
@@ -46,7 +46,7 @@ jobs:
           if [ -f "CLEANUP_CACHE.py" ]; then
             python3 CLEANUP_CACHE.py
           else
-            echo "⚠ CLEANUP_CACHE.py file nahi mili, cleanup step skip kiya gaya."
+            echo "⚠ CLEANUP_CACHE.py missing, skipping step."
           fi
 
       - name: 🗂️ Restore Master Cache
@@ -61,7 +61,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-fb-story-master-
 
-      - name: 📁 Prepare System Directory Structure
+      - name: 📁 Prepare System Directory
         timeout-minutes: 1
         run: |
           mkdir -p "$DEPS_DIR"/{bin,fonts,libs,python-venv,logs}
@@ -76,11 +76,10 @@ jobs:
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
 
           if [ -z "$TOKEN_GITHUB" ]; then
-            echo "❌ Error: TOKEN_GITHUB secret missing hai!"
+            echo "❌ TOKEN_GITHUB secret missing!"
             exit 1
           fi
 
-          # Clone Private Repo Sparse Checkout
           GIT_TERMINAL_PROMPT=0 git clone --depth 1 --filter=blob:none --sparse \
             https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git \
             temp_private_repo
@@ -98,17 +97,14 @@ jobs:
 
           rm -rf temp_private_repo
 
-          # Verify Required Python Files
-          echo "🔍 Verifying Python Files..."
           REQUIRED_FILES=("MAIN_00.py" "CONFIG_01.py" "UTILS_02.py" "FETCHERS_03.py" "VOICE_04.py" "RENDER_05.py" "UPLOAD_06.py")
           for file in "${REQUIRED_FILES[@]}"; do
             if [ ! -f "$TARGET_DIR/$file" ]; then
               echo "❌ Missing required file: $file"
-              ls -la "$TARGET_DIR/"
               exit 1
             fi
           done
-          echo "✅ Saari 7 Python files download aur verify ho gayi hain!"
+          echo "✅ All 7 code files successfully synced!"
 
       - name: 🐍 Setup Python 3.11
         uses: actions/setup-python@v5
@@ -120,18 +116,15 @@ jobs:
         timeout-minutes: 5
         run: |
           if ! command -v ffmpeg &> /dev/null; then
-            echo "⚙ Installing FFmpeg..."
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg
-          else
-            echo "✅ FFmpeg pehle se installed hai"
           fi
 
-      - name: 🔤 Setup Multilingual Fonts (Hindi, Arabic, English)
+      - name: 🔤 Setup Noto Fonts
         timeout-minutes: 5
         run: |
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 3 ]; then
-            echo "✅ Custom fonts cache se restore ho gaye"
+            echo "✅ Fonts restored from cache"
           else
             mkdir -p "$DEPS_DIR/fonts"
             declare -A FONTS=(
@@ -144,17 +137,15 @@ jobs:
             done
             touch "$DEPS_DIR/.fonts_ok"
           fi
-          
           echo "FONTS_DIR=$DEPS_DIR/fonts" >> $GITHUB_ENV
 
-      - name: 🐍 Install Python Dependencies
+      - name: 🐍 Install Dependencies
         timeout-minutes: 5
         run: |
           VENV="$DEPS_DIR/python-venv"
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, requests" 2>/dev/null; then
-            echo "✅ Python libraries cache se restore ho gayi hain"
+            echo "✅ Python virtualenv restored"
           else
-            echo "📦 Installing Python Packages..."
             rm -rf "$VENV"
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
@@ -163,7 +154,7 @@ jobs:
           fi
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      - name: 🚀 Run Main Pipeline & Telegram Verification
+      - name: 🚀 Run Main Pipeline
         timeout-minutes: 15
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -182,7 +173,7 @@ jobs:
           cd "Social media/Facebook/Facebook Story"
           python3 MAIN_00.py
 
-      - name: 📤 Upload Video Artifact
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         timeout-minutes: 5
         if: always()
@@ -192,7 +183,7 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
-      - name: 🧹 Cleanup Temp Files
+      - name: 🧹 Temp Cleanup
         if: always()
         timeout-minutes: 1
         run: |
