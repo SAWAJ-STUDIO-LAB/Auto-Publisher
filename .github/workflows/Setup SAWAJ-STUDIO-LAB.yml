@@ -162,7 +162,7 @@ jobs:
 
           write_file "docs/SETUP.md" '# Setup Guide'
           write_file "docs/ARCHITECTURE.md" '# Architecture'
-          write_file "docs/SECRETS.md' '# Secrets Guide'
+          write_file "docs/SECRETS.md" '# Secrets Guide'
           write_file "docs/API_KEYS.md" '# API Keys'
           write_file "docs/TROUBLESHOOTING.md" '# Troubleshooting'
 
