@@ -1,4 +1,5 @@
-name: "🟢Facebook Story Video"
+
+name: "🟢 Facebook Story Video"
 
 on:
   workflow_dispatch:
@@ -9,14 +10,14 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '30 23 * * *'   # 5:00 AM IST
+    - cron: '30 23 * * *'
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: facebook-story
+  group: facebook-morning-story
   cancel-in-progress: false
 
 jobs:
@@ -69,10 +70,10 @@ jobs:
       - name: Install Python Packages & Refresh Fonts
         run: |
           fc-cache -f -v
-          pip install --no-cache-dir -r social_media/sawajstudio_facebook_story_01/requirements.txt
+          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-      - name: Run Facebook Story Pipeline
-        working-directory: social_media/sawajstudio_facebook_story_01
+      - name: Run Story Pipeline
+        working-directory: social_media/facebook/story_video
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -81,7 +82,7 @@ jobs:
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
-          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
+          FACEBOOK_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
@@ -90,6 +91,7 @@ jobs:
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
@@ -98,12 +100,13 @@ jobs:
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
-        run: python run_story.py
+        run: python3 run_story.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: facebook-story
-          path: social_media/sawajstudio_facebook_story_01/Final_Story.mp4
+          path: social_media/facebook/story_video/Final_Story.mp4
           retention-days: 5
           if-no-files-found: ignore
