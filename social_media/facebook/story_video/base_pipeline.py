@@ -8,9 +8,8 @@ from urllib3.util.retry import Retry
 
 from config import Config
 from logger import (
-    log_file_start, log_file_end, log_step, log_error, log_api,
+    log_file_start, log_file_end, log_step, log_error,
 )
-from telegram import send_tg
 
 
 class BasePipeline:
@@ -45,6 +44,7 @@ class BasePipeline:
         return t.replace('"', '').replace("'", '').replace('\n', ' ').strip()
 
     def report_api_status(self):
+        from telegram import send_tg
         lines = ["📊 <b>API STATUS REPORT</b>\n"]
         for section, status in self.api_status.items():
             if not status:
