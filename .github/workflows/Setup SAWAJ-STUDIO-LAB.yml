@@ -23,7 +23,6 @@ jobs:
           echo "=========================================="
           echo "  CREATING DIRECTORIES AUTOMATICALLY"
           echo "=========================================="
-          mkdir -p .github/workflows
           mkdir -p src/sawaj_studio/core
           mkdir -p src/sawaj_studio/fetchers
           mkdir -p src/sawaj_studio/media
@@ -53,15 +52,6 @@ jobs:
           echo "=========================================="
           echo "  CREATING & SYNCING FILES AUTOMATICALLY"
           echo "=========================================="
-          
-          # Workflows
-          write_file ".github/workflows/facebook_story.yml" 'name: Facebook Story Pipeline\non:\n  schedule:\n    - cron: "0 6 * * *"\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/facebook_short.yml" 'name: Facebook Short Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/facebook_long.yml" 'name: Facebook Long Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/instagram_story.yml" 'name: Instagram Story Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/instagram_short.yml" 'name: Instagram Short Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/youtube_short.yml" 'name: YouTube Short Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
-          write_file ".github/workflows/youtube_long.yml" 'name: YouTube Long Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
 
           # Source & Modules
           write_file "src/sawaj_studio/__init__.py" '"""SAWAJ Studio — Automated Islamic content pipeline."""\n__version__ = "1.0.0"'
