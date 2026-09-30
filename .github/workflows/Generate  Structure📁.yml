@@ -1,7 +1,7 @@
-name: 📁Generate Folder Structure
+Name: Generate Folder Structure
 
 on:
-  workflow_dispatch: # Actions tab se manual run karne ke liye
+  workflow_dispatch:
 
 jobs:
   build-structure:
@@ -12,80 +12,80 @@ jobs:
         with:
           token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
 
-      - name: Generate All Directories and Files
+      - name: Generate Platform Directory Structure
         run: |
-          # 1. Create Github Workflows Directory
+          # 1. GitHub Workflows Directory
           mkdir -p .github/workflows
           
-          # 2. Create Workflow Placeholders
+          # Only valid workflows for each platform
           workflows=(
-            "facebook_story_01.yml"
-            "facebook_short_02.yml"
-            "facebook_long_03.yml"
-            "instagram_story_04.yml"
-            "instagram_short_05.yml"
-            "instagram_long_06.yml"
-            "youtube_short_07.yml"
-            "youtube_long_08.yml"
-            "youtube_video_09.yml"
+            "facebook_story.yml"
+            "facebook_short.yml"
+            "facebook_long.yml"
+            "instagram_story.yml"
+            "instagram_short.yml"
+            "youtube_short.yml"
+            "youtube_long.yml"
           )
           for wf in "${workflows[@]}"; do
             touch ".github/workflows/$wf"
           done
 
-          # 3. Create Root Social Media Directory
+          # 2. Root Social Media Directory
           mkdir -p social_media
           touch social_media/__init__.py
 
-          # 4. Modules Definition (Module_Name : Type : Extra_Files)
+          # 3. Platform & Content Type Mapping (Path : Type : Extra_Files)
           modules=(
-            "sawajstudio_facebook_story_01:story:stickers.py"
-            "sawajstudio_facebook_short_02:short:hashtags.py cover.py"
-            "sawajstudio_facebook_long_03:long:thumbnail.py chapters.py"
-            "sawajstudio_instagram_story_04:story:stickers.py"
-            "sawajstudio_instagram_short_05:short:hashtags.py cover.py"
-            "sawajstudio_instagram_long_06:long:thumbnail.py hashtags.py"
-            "sawajstudio_youtube_short_07:short:hashtags.py"
-            "sawajstudio_youtube_long_08:long:thumbnail.py chapters.py seo.py"
-            "sawajstudio_youtube_video_09:video:thumbnail.py chapters.py seo.py playlist.py"
+            "facebook/story_video:story:stickers.py"
+            "facebook/short_video:short:hashtags.py cover.py"
+            "facebook/long_video:long:thumbnail.py chapters.py"
+            "instagram/story_video:story:stickers.py"
+            "instagram/short_video:short:hashtags.py cover.py"
+            "youtube/short_video:short:hashtags.py"
+            "youtube/long_video:long:thumbnail.py chapters.py seo.py playlist.py"
           )
 
-          # Common python files present directly in module root
+          # Common python files for all modules
           common_files=(
             "config.py" "logger.py" "session.py" "telegram.py" "utils.py"
             "hadith.py" "ai_provider.py" "translator.py" "tts.py" "music.py"
             "background.py" "logo.py" "subtitles.py" "frames.py" "composer.py" "drive.py"
           )
 
-          # 5. Build Each Flat Module Structure
+          # 4. Generate Files and Output Folders
           for mod in "${modules[@]}"; do
-            IFS=':' read -r mod_name type extra_shared <<< "$mod"
-            base="social_media/$mod_name"
+            IFS=':' read -r path type extra_shared <<< "$mod"
+            base="social_media/$path"
 
             # Create Output Directories
             mkdir -p "$base/output/temp" "$base/output/final"
             touch "$base/output/temp/.gitkeep" "$base/output/final/.gitkeep"
 
-            # Root module setup files
+            # Create Platform __init__.py
+            platform_dir=$(dirname "$base")
+            touch "$platform_dir/__init__.py"
+
+            # Module Config & Root Setup
             touch "$base/__init__.py" "$base/requirements.txt" "$base/env.example" "$base/.gitignore"
             touch "$base/README.md" "$base/Makefile" "$base/pyproject.toml"
 
-            # Common Python modules (Flat structure)
+            # Common Python modules
             for file in "${common_files[@]}"; do
               touch "$base/$file"
             done
 
-            # Extra module-specific files
+            # Module-specific Extra files
             for ex_file in $extra_shared; do
               touch "$base/$ex_file"
             done
 
-            # Pipelines, Uploaders, Runners (Flat structure)
+            # Pipelines, Uploaders, Runners
             touch "$base/base_pipeline.py" "$base/${type}_pipeline.py"
             touch "$base/upload_${type}.py"
             touch "$base/run_${type}.py"
 
-            # Tests (Flat structure)
+            # Tests
             touch "$base/test_${type}.py" "$base/test_media.py" "$base/test_render.py" "$base/conftest.py"
           done
 
@@ -94,5 +94,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "chore: auto-generate flat studio folder structure" || exit 0
+          git commit -m "chore: update folder structure to match exact platform capabilities" || exit 0
           git push
