@@ -1,0 +1,13 @@
+output/temp/*
+output/final/*
+!output/temp/.gitkeep
+!output/final/.gitkeep
+__pycache__/
+*.pyc
+.env
+*.mp3
+*.mp4
+avatar.png
+s_frames/
+Final_Story.mp4
+.pytest_cache/
