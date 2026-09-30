@@ -1,15 +1,4 @@
-# ═══════════════════════════════════════════════════════════════════════════
-# FACEBOOK STORY AUTOMATION WORKFLOW (v12 — PRODUCTION READY)
-# ═══════════════════════════════════════════════════════════════════════════
-# KAAM: Private repo se code fetch karo, video render karo, upload karo.
-#
-# FIXES IN v12:
-#   1. Token verify via API (debug output)
-#   2. Auto cache cleanup (alag Python file se)
-#   3. FFmpeg libs included
-#   4. Better error messages
-#   5. Sparse clone (fast)
-# ═══════════════════════════════════════════════════════════════════════════
+# FACEBOOK STORY AUTOMATION — v12
 
 name: "🔵FACEBOOK STORY"
 
@@ -21,7 +10,6 @@ on:
         required: true
         type: boolean
         default: false
-
   schedule:
     - cron: '30 23 * * *'
 
@@ -43,16 +31,10 @@ jobs:
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     steps:
-      # ─────────────────────────────────────────────────────────────
-      # STEP 1: CHECKOUT
-      # ─────────────────────────────────────────────────────────────
-      - name: ✅ Checkout Public Repository
+      - name: ✅ Checkout
         uses: actions/checkout@v4
         timeout-minutes: 2
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 2: AUTO CACHE CLEANUP (alag Python file se)
-      # ─────────────────────────────────────────────────────────────
       - name: 🧹 Auto Cache Cleanup
         if: always()
         timeout-minutes: 3
@@ -62,10 +44,7 @@ jobs:
           CACHE_VERSION: ${{ env.CACHE_VERSION }}
         run: python3 CLEANUP_CACHE.py
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 3: MASTER CACHE RESTORE
-      # ─────────────────────────────────────────────────────────────
-      - name: 🗂️ Restore Master Dependencies Cache
+      - name: 🗂️ Restore Cache
         id: master-cache
         uses: actions/cache@v4
         timeout-minutes: 5
@@ -79,74 +58,45 @@ jobs:
             ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 4: DEPS FOLDER
-      # ─────────────────────────────────────────────────────────────
-      - name: 📁 Prepare Dependencies Folder
+      - name: 📁 Prepare Folders
         timeout-minutes: 1
         run: |
           mkdir -p "$DEPS_DIR"/{bin,fonts,libs,models,system-fonts,python-venv,piper,coqui,logs}
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
-          echo "✅ Deps folder ready: $DEPS_DIR"
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 5: PRIVATE REPO FETCH (TOKEN FIXED)
-      # ─────────────────────────────────────────────────────────────
-      - name: 📥 Fetch Code from Private Repository
+      - name: 📥 Fetch Private Repo Code
         timeout-minutes: 10
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
           set -e
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
-          echo "🔐 Private repo se code laa rahe hain..."
-          echo "📋 Token length: ${#TOKEN_GITHUB}"
-          echo "📋 Token prefix: ${TOKEN_GITHUB:0:4}****"
 
           if [ -z "$TOKEN_GITHUB" ]; then
-            echo "❌ TOKEN_GITHUB is empty!"
+            echo "❌ TOKEN_GITHUB empty"
             exit 1
           fi
 
-          echo ""
-          echo "🔍 Verifying token via GitHub API..."
           API_STATUS=$(curl -s -o /tmp/user.json -w "%{http_code}" \
             -H "Authorization: token $TOKEN_GITHUB" \
             https://api.github.com/user)
-          echo "   API Status: $API_STATUS"
 
           if [ "$API_STATUS" != "200" ]; then
-            echo "❌ Token invalid — API returned $API_STATUS"
+            echo "❌ Token invalid — $API_STATUS"
             cat /tmp/user.json
             exit 1
           fi
 
-          SCOPES=$(curl -s -I \
-            -H "Authorization: token $TOKEN_GITHUB" \
-            https://api.github.com/user | grep -i "x-oauth-scopes:" | cut -d' ' -f2-)
-          echo "   Scopes: $SCOPES"
-
-          if [[ "$SCOPES" != *"repo"* ]]; then
-            echo "❌ 'repo' scope missing!"
-            exit 1
-          fi
-
-          echo ""
-          echo "🔍 Testing private repo access..."
           REPO_STATUS=$(curl -s -o /tmp/repo.json -w "%{http_code}" \
             -H "Authorization: token $TOKEN_GITHUB" \
             https://api.github.com/repos/$PRIVATE_REPO)
-          echo "   Repo API Status: $REPO_STATUS"
 
           if [ "$REPO_STATUS" != "200" ]; then
-            echo "❌ Private repo NOT accessible — status $REPO_STATUS"
+            echo "❌ Repo not accessible — $REPO_STATUS"
             cat /tmp/repo.json
             exit 1
           fi
-          echo "✅ Private repo accessible!"
 
-          echo ""
-          echo "📥 Sparse cloning..."
           GIT_TERMINAL_PROMPT=0 git clone --depth 1 --filter=blob:none --sparse \
             https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git \
             temp_private_repo
@@ -154,8 +104,6 @@ jobs:
           cd temp_private_repo
           git sparse-checkout set "Social media/Facebook"
           cd ..
-
-          echo "✅ Clone done!"
 
           TARGET_DIR="Social media/Facebook/Facebook Story"
           mkdir -p "$TARGET_DIR"
@@ -166,41 +114,23 @@ jobs:
 
           rm -rf temp_private_repo
 
-          echo ""
-          echo "✅ Files copied:"
-          ls -la "$TARGET_DIR/"
-
-          echo ""
-          echo "🔍 Verifying files..."
-          MISSING=0
           for f in 00_MAIN.py 01_CONFIG.py 02_UTILS.py 03_FETCHERS.py 04_VOICE.py 05_RENDER.py 06_UPLOAD.py; do
             if [ ! -f "$TARGET_DIR/$f" ]; then
               echo "❌ Missing: $f"
-              MISSING=1
+              ls -la "$TARGET_DIR/"
+              exit 1
             fi
           done
 
-          if [ $MISSING -eq 1 ]; then
-            echo ""
-            echo "⚠️ Some files missing — listing all files:"
-            ls -la "$TARGET_DIR/"
-            exit 1
-          fi
-          echo "✅ All 7 files present!"
+          echo "✅ All files present"
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 6: PYTHON SETUP
-      # ─────────────────────────────────────────────────────────────
-      - name: Setup Python 3.11
+      - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         timeout-minutes: 2
         with:
           python-version: '3.11'
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 7: FFMPEG + FONTS
-      # ─────────────────────────────────────────────────────────────
-      - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
+      - name: 🎬 FFmpeg + Fonts
         timeout-minutes: 10
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
@@ -212,7 +142,6 @@ jobs:
              [ -d "$LIBS_DIR" ] && \
              [ "$(ls -A $LIBS_DIR 2>/dev/null | wc -l)" -gt 5 ]; then
 
-            echo "⚡ FFmpeg + SoX CACHED — restoring binaries + libs..."
             sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
@@ -233,13 +162,11 @@ jobs:
             fi
 
             if ! ffmpeg -version > /dev/null 2>&1 || ! sox --version > /dev/null 2>&1; then
-              echo "⚠️ Cached binaries broken — falling back to apt install..."
               sudo apt-get update -q
               sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all
               sudo ldconfig
             fi
           else
-            echo "📥 FFmpeg + SoX + espeak-ng install (fresh)..."
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
@@ -258,35 +185,23 @@ jobs:
                 fi
               done
             done
-            echo "📚 Saved $(ls $LIBS_DIR 2>/dev/null | wc -l) libraries"
 
             mkdir -p "$DEPS_DIR/system-fonts/truetype"
             cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
 
             if ffmpeg -version > /dev/null 2>&1 && sox --version > /dev/null 2>&1; then
               touch "$MARKER"
-              echo "✅ FFmpeg + SoX + libs cached successfully!"
             else
-              echo "❌ Verification failed"
               exit 1
             fi
           fi
 
-          echo "🔍 Verifying tools..."
-          ffmpeg -version | head -1 || (echo "❌ ffmpeg broken" && exit 1)
-          sox --version || (echo "❌ sox broken" && exit 1)
-          echo "✅ All tools working!"
-
-      # ─────────────────────────────────────────────────────────────
-      # STEP 8: FONTS
-      # ─────────────────────────────────────────────────────────────
-      - name: 🔤 Custom Fonts (Cache-Aware)
+      - name: 🔤 Custom Fonts
         timeout-minutes: 5
         run: |
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
-            echo "⚡ Custom fonts CACHED!"
+            echo "Cached"
           else
-            echo "📥 Custom fonts download..."
             mkdir -p "$DEPS_DIR/fonts"
 
             declare -A FONTS=(
@@ -303,25 +218,20 @@ jobs:
             done
 
             touch "$DEPS_DIR/.fonts_ok"
-            echo "✅ Custom fonts cached!"
           fi
 
           mkdir -p ~/.fonts
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 9: PYTHON PACKAGES
-      # ─────────────────────────────────────────────────────────────
-      - name: 🐍 Python Packages (Cache-Aware)
+      - name: 🐍 Python Packages
         timeout-minutes: 10
         run: |
           VENV="$DEPS_DIR/python-venv"
 
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
-            echo "⚡ Python packages CACHED!"
+            echo "Cached"
           else
-            echo "📥 Python packages install..."
             rm -rf "$VENV"
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
@@ -332,23 +242,18 @@ jobs:
               gTTS boto3 piper-tts numpy scipy soundfile
 
             touch "$VENV/.installed"
-            echo "✅ Python packages cached!"
           fi
 
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 10: PIPER MODELS
-      # ─────────────────────────────────────────────────────────────
-      - name: 🎙️ Piper Models (Cache-Aware)
+      - name: 🎙️ Piper Models
         timeout-minutes: 10
         run: |
           P="$DEPS_DIR/piper"
 
           if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
-            echo "⚡ Piper models CACHED!"
+            echo "Cached"
           else
-            echo "📥 Piper models download..."
             rm -rf "$P" && mkdir -p "$P"
             cd "$P"
 
@@ -361,74 +266,22 @@ jobs:
 
             touch "$P/.installed"
             cd "$GITHUB_WORKSPACE"
-            echo "✅ Piper models cached!"
           fi
 
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 11: HEALTH CHECK
-      # ─────────────────────────────────────────────────────────────
-      - name: 🔍 Master Tool Health Check
-        id: health
-        timeout-minutes: 2
-        run: |
-          REPORT_FILE="$DEPS_DIR/tools_status.json"
-          echo "{" > "$REPORT_FILE"
-          echo "  \"checked_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$REPORT_FILE"
-          echo "  \"tools\": {" >> "$REPORT_FILE"
-
-          FIRST=1
-          add_entry() {
-            local name="$1"; local status="$2"; local detail="$3"
-            if [ $FIRST -eq 0 ]; then echo "," >> "$REPORT_FILE"; fi
-            FIRST=0
-            printf '    "%s": {"status": "%s", "detail": "%s"}' "$name" "$status" "$detail" >> "$REPORT_FILE"
-            echo "[HEALTH] $name → $status ($detail)"
-          }
-
-          for bin in ffmpeg ffprobe sox espeak-ng edge-tts gtts-cli piper; do
-            if command -v $bin >/dev/null 2>&1; then
-              add_entry "$bin" "ok" "present"
-            else add_entry "$bin" "fail" "not found"; fi
-          done
-
-          if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then
-            SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1)
-            add_entry "piper-model" "ok" "$SZ"
-          else add_entry "piper-model" "fail" "missing"; fi
-
-          FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
-          add_entry "custom-fonts" "ok" "$FC files"
-
-          if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
-            add_entry "python-venv" "ok" "installed"
-          else add_entry "python-venv" "fail" "missing"; fi
-
-          echo "  }" >> "$REPORT_FILE"
-          echo "}" >> "$REPORT_FILE"
-
-          echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
-          cat "$REPORT_FILE"
-
-      # ─────────────────────────────────────────────────────────────
-      # STEP 12: MAIN PIPELINE
-      # ─────────────────────────────────────────────────────────────
-      - name: 🚀 Run Facebook Story Pipeline
+      - name: 🚀 Run Pipeline
         timeout-minutes: 30
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
-
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
@@ -437,11 +290,9 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
           HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
-
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
           AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
@@ -449,12 +300,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
           HADITH_API_KEY: ${{ secrets.HADITH_API_KEY }}
-
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
           FONTS_DIR: ${{ env.DEPS_DIR }}/fonts
@@ -463,12 +311,8 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: |
           cd "Social media/Facebook/Facebook Story"
-          ls -la
           python3 00_MAIN.py
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 13: ARTIFACT
-      # ─────────────────────────────────────────────────────────────
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         timeout-minutes: 5
@@ -479,27 +323,16 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 14: CLEANUP
-      # ─────────────────────────────────────────────────────────────
-      - name: 🧹 Cleanup Public Repo
+      - name: 🧹 Cleanup
         if: always()
         timeout-minutes: 1
         run: |
           rm -rf "Social media"
           rm -f Final_FB_Story.mp4
-          echo "✅ Clean!"
 
-      # ─────────────────────────────────────────────────────────────
-      # STEP 15: CACHE STATUS
-      # ─────────────────────────────────────────────────────────────
       - name: 📊 Cache Status
         if: always()
         timeout-minutes: 1
         run: |
-          echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          echo "Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# END OF FB-STORY.YML v12
-# ═══════════════════════════════════════════════════════════════════════════
