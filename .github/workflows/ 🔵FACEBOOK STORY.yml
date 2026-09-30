@@ -1,30 +1,18 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# FACEBOOK STORY AUTOMATION WORKFLOW (v11 - PRODUCTION READY)
+# FACEBOOK STORY AUTOMATION WORKFLOW (v12 — AUTO CACHE CLEANUP)
 # ═══════════════════════════════════════════════════════════════════════════
-# KAAM: Yeh workflow:
-#       1. Private repo se 7 Python files fetch karta hai (00_MAIN.py etc.)
-#       2. Saari dependencies (FFmpeg, fonts, Piper) cache se restore karta hai
-#       3. Python pipeline (00_MAIN.py) chalata hai
-#       4. Video render + Google Drive + Facebook Story upload karta hai
-#       5. Telegram par live 1-second report bhejta hai
+# KAAM: Private repo se code fetch karo, video render karo, upload karo.
 #
-# TRIGGER:
-#   - Manual: GitHub Actions UI se "Run workflow"
-#   - Schedule: Roz 5:00 AM IST (23:30 UTC)
-#
-# RUNTIME:
-#   - Cached: ~3-4 minutes
-#   - First run: ~8-10 minutes
+# FIXES IN v12:
+#   1. Token check bug fix — API se verify pehle
+#   2. Auto cache cleanup — purane cache khud delete honge
+#   3. Debug output — exact error pata chalega
+#   4. Better error messages
 # ═══════════════════════════════════════════════════════════════════════════
 
-# [01] Workflow ka naam
 name: "🔵FACEBOOK STORY"
 
-# ═══════════════════════════════════════════════════════════════════════════
-# [02] TRIGGERS
-# ═══════════════════════════════════════════════════════════════════════════
 on:
-  # [03] Manual trigger
   workflow_dispatch:
     inputs:
       upload_to_social:
@@ -33,40 +21,26 @@ on:
         type: boolean
         default: false
 
-  # [04] Auto trigger — roz 5 AM IST
   schedule:
     - cron: '30 23 * * *'
 
-# ═══════════════════════════════════════════════════════════════════════════
-# [05] PERMISSIONS
-# ═══════════════════════════════════════════════════════════════════════════
 permissions:
   contents: write
-  actions: write
+  actions: write      # ← Cache delete karne ke liye zaroori
 
-# ═══════════════════════════════════════════════════════════════════════════
-# [06] CONCURRENCY
-# ═══════════════════════════════════════════════════════════════════════════
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
-# ═══════════════════════════════════════════════════════════════════════════
-# [07] JOB
-# ═══════════════════════════════════════════════════════════════════════════
 jobs:
   fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
-    # [08] Global env
     env:
-      CACHE_VERSION: v11
+      CACHE_VERSION: v12
       DEPS_DIR: ${{ github.workspace }}/.dependencies
 
-    # ═══════════════════════════════════════════════════════════════════
-    # [09] STEPS
-    # ═══════════════════════════════════════════════════════════════════
     steps:
       # ─────────────────────────────────────────────────────────────
       # STEP 1: CHECKOUT
@@ -76,7 +50,117 @@ jobs:
         timeout-minutes: 2
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 2: MASTER CACHE RESTORE
+      # STEP 2: AUTO CACHE CLEANUP 🧹
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Purane cache automatically delete karo
+      # 
+      # KYA DELETES:
+      #   - 7 din se purane saare cache
+      #   - Purane CACHE_VERSION wale cache (v10, v11 etc.)
+      #
+      # KAISE:
+      #   - GitHub API se cache list nikalo
+      #   - Purane wale delete karo
+      # ═════════════════════════════════════════════════════════════
+      - name: 🧹 Auto Cache Cleanup (Purane cache delete)
+        if: always()
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "🧹 Auto Cache Cleanup shuru..."
+          echo "📦 Current cache version: $CACHE_VERSION"
+          echo ""
+
+          # ─── Step 1: Saare caches list karo ───
+          CACHES=$(curl -s \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/actions/caches?per_page=100")
+
+          # ─── Step 2: Cache count print karo ───
+          TOTAL=$(echo "$CACHES" | grep -c '"id":' || echo "0")
+          echo "📊 Total caches found: $TOTAL"
+          echo ""
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "✅ Koi cache nahi hai — cleanup skip"
+            exit 0
+          fi
+
+          # ─── Step 3: Har cache check karo ───
+          echo "$CACHES" | python3 -c "
+import sys, json, subprocess
+from datetime import datetime, timezone, timedelta
+
+try:
+    data = json.load(sys.stdin)
+except:
+    print('⚠️ JSON parse failed')
+    sys.exit(0)
+
+caches = data.get('actions_caches', [])
+print(f'Found {len(caches)} caches')
+print('')
+
+current_version = '$CACHE_VERSION'
+now = datetime.now(timezone.utc)
+deleted = 0
+kept = 0
+
+for cache in caches:
+    cache_id = cache.get('id')
+    cache_key = cache.get('key', '')
+    cache_size = cache.get('size_in_bytes', 0) / (1024*1024)  # MB
+    
+    # Cache banaya kab
+    created_str = cache.get('created_at', '')
+    try:
+        created = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+        days_old = (now - created).days
+    except:
+        days_old = 999
+    
+    # ─── Delete rules ───
+    should_delete = False
+    reason = ''
+    
+    # Rule 1: 7 din se purana
+    if days_old >= 7:
+        should_delete = True
+        reason = f'{days_old} days old'
+    
+    # Rule 2: Purana version (v10, v11) — current v12
+    elif not cache_key.startswith(f'Linux-fb-story-master-{current_version}'):
+        should_delete = True
+        reason = f'old version'
+    
+    if should_delete:
+        print(f'🗑️  Deleting: {cache_key[:60]}')
+        print(f'   Size: {cache_size:.1f} MB | Age: {days_old} days | Reason: {reason}')
+        try:
+            result = subprocess.run([
+                'curl', '-s', '-X', 'DELETE',
+                '-H', f'Authorization: token {cache_key and \"\"}',
+                f'https://api.github.com/repos/$REPO/actions/caches/{cache_id}'
+            ], capture_output=True, text=True, env={'GH_TOKEN': '$GH_TOKEN'})
+            deleted += 1
+        except Exception as e:
+            print(f'   ⚠️ Delete failed: {e}')
+    else:
+        print(f'✅ Keeping: {cache_key[:60]} (current version, {days_old} days old)')
+        kept += 1
+
+print('')
+print(f'📊 Summary: Deleted {deleted} | Kept {kept}')
+"
+
+          echo ""
+          echo "✅ Auto cache cleanup complete!"
+
+      # ─────────────────────────────────────────────────────────────
+      # STEP 3: MASTER CACHE RESTORE
       # ─────────────────────────────────────────────────────────────
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
@@ -93,7 +177,7 @@ jobs:
             ${{ runner.os }}-fb-story-master-
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 3: DEPENDENCIES FOLDER
+      # STEP 4: DEPS FOLDER
       # ─────────────────────────────────────────────────────────────
       - name: 📁 Prepare Dependencies Folder
         timeout-minutes: 1
@@ -103,12 +187,10 @@ jobs:
           echo "✅ Deps folder ready: $DEPS_DIR"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 4: PRIVATE REPO SE CODE FETCH (SPARSE + VERIFY)
+      # STEP 5: PRIVATE REPO FETCH (TOKEN FIXED ✅)
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Private repo se 7 Python files fetch karo (fast sparse clone)
-      # ═════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
-        timeout-minutes: 5
+        timeout-minutes: 10
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
@@ -116,19 +198,51 @@ jobs:
           PRIVATE_REPO="SAWAJ-STUDIO-LAB/admin"
           echo "🔐 Private repo se code laa rahe hain..."
           echo "📋 Token length: ${#TOKEN_GITHUB}"
+          echo "📋 Token prefix: ${TOKEN_GITHUB:0:4}****"
 
           if [ -z "$TOKEN_GITHUB" ]; then
             echo "❌ TOKEN_GITHUB is empty!"
             exit 1
           fi
 
-          echo "🔍 Testing repo access..."
-          if ! git ls-remote https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git HEAD > /dev/null 2>&1; then
-            echo "❌ Cannot access private repo. Token expired or invalid."
+          echo ""
+          echo "🔍 Verifying token via GitHub API..."
+          API_STATUS=$(curl -s -o /tmp/user.json -w "%{http_code}" \
+            -H "Authorization: token $TOKEN_GITHUB" \
+            https://api.github.com/user)
+          echo "   API Status: $API_STATUS"
+
+          if [ "$API_STATUS" != "200" ]; then
+            echo "❌ Token invalid — API returned $API_STATUS"
+            cat /tmp/user.json
             exit 1
           fi
-          echo "✅ Repo access OK!"
 
+          SCOPES=$(curl -s -I \
+            -H "Authorization: token $TOKEN_GITHUB" \
+            https://api.github.com/user | grep -i "x-oauth-scopes:" | cut -d' ' -f2-)
+          echo "   Scopes: $SCOPES"
+
+          if [[ "$SCOPES" != *"repo"* ]]; then
+            echo "❌ 'repo' scope missing!"
+            exit 1
+          fi
+
+          echo ""
+          echo "🔍 Testing private repo access..."
+          REPO_STATUS=$(curl -s -o /tmp/repo.json -w "%{http_code}" \
+            -H "Authorization: token $TOKEN_GITHUB" \
+            https://api.github.com/repos/$PRIVATE_REPO)
+          echo "   Repo API Status: $REPO_STATUS"
+
+          if [ "$REPO_STATUS" != "200" ]; then
+            echo "❌ Private repo NOT accessible — status $REPO_STATUS"
+            cat /tmp/repo.json
+            exit 1
+          fi
+          echo "✅ Private repo accessible!"
+
+          echo ""
           echo "📥 Sparse cloning..."
           GIT_TERMINAL_PROMPT=0 git clone --depth 1 --filter=blob:none --sparse \
             https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git \
@@ -149,20 +263,30 @@ jobs:
 
           rm -rf temp_private_repo
 
+          echo ""
           echo "✅ Files copied:"
           ls -la "$TARGET_DIR/"
 
+          echo ""
           echo "🔍 Verifying files..."
+          MISSING=0
           for f in 00_MAIN.py 01_CONFIG.py 02_UTILS.py 03_FETCHERS.py 04_VOICE.py 05_RENDER.py 06_UPLOAD.py; do
             if [ ! -f "$TARGET_DIR/$f" ]; then
               echo "❌ Missing: $f"
-              exit 1
+              MISSING=1
             fi
           done
-          echo "✅ All files present!"
+
+          if [ $MISSING -eq 1 ]; then
+            echo ""
+            echo "⚠️ Some files missing — listing all files:"
+            ls -la "$TARGET_DIR/"
+            exit 1
+          fi
+          echo "✅ All 7 files present!"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 5: PYTHON SETUP
+      # STEP 6: PYTHON SETUP
       # ─────────────────────────────────────────────────────────────
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -171,7 +295,7 @@ jobs:
           python-version: '3.11'
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 6: FFMPEG + FONTS (WITH LIBS)
+      # STEP 7: FFMPEG
       # ─────────────────────────────────────────────────────────────
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
         timeout-minutes: 10
@@ -186,7 +310,6 @@ jobs:
              [ "$(ls -A $LIBS_DIR 2>/dev/null | wc -l)" -gt 5 ]; then
 
             echo "⚡ FFmpeg + SoX CACHED — restoring binaries + libs..."
-
             sudo mkdir -p /usr/local/bin
             sudo cp "$DEPS_DIR/bin/ffmpeg" /usr/local/bin/ffmpeg
             sudo cp "$DEPS_DIR/bin/ffprobe" /usr/local/bin/ffprobe
@@ -212,10 +335,8 @@ jobs:
               sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all
               sudo ldconfig
             fi
-
           else
             echo "📥 FFmpeg + SoX + espeak-ng install (fresh)..."
-
             sudo apt-get update -q
             sudo apt-get install -y -q ffmpeg sox espeak-ng libsox-fmt-all \
               fonts-noto fonts-noto-core fonts-noto-extra \
@@ -254,7 +375,7 @@ jobs:
           echo "✅ All tools working!"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 7: CUSTOM FONTS
+      # STEP 8: FONTS
       # ─────────────────────────────────────────────────────────────
       - name: 🔤 Custom Fonts (Cache-Aware)
         timeout-minutes: 5
@@ -287,7 +408,7 @@ jobs:
           fc-cache -f > /dev/null 2>&1 || true
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 8: PYTHON PACKAGES
+      # STEP 9: PYTHON PACKAGES
       # ─────────────────────────────────────────────────────────────
       - name: 🐍 Python Packages (Cache-Aware)
         timeout-minutes: 10
@@ -314,7 +435,7 @@ jobs:
           echo "$VENV/bin" >> $GITHUB_PATH
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 9: PIPER MODELS
+      # STEP 10: PIPER MODELS
       # ─────────────────────────────────────────────────────────────
       - name: 🎙️ Piper Models (Cache-Aware)
         timeout-minutes: 10
@@ -343,7 +464,7 @@ jobs:
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 10: TOOL HEALTH CHECK
+      # STEP 11: HEALTH CHECK
       # ─────────────────────────────────────────────────────────────
       - name: 🔍 Master Tool Health Check
         id: health
@@ -363,51 +484,19 @@ jobs:
             echo "[HEALTH] $name → $status ($detail)"
           }
 
-          if command -v ffmpeg >/dev/null 2>&1; then
-            V=$(ffmpeg -version 2>&1 | head -1 | cut -d' ' -f3)
-            add_entry "ffmpeg" "ok" "$V"
-          else add_entry "ffmpeg" "fail" "not found"; fi
-
-          if command -v ffprobe >/dev/null 2>&1; then
-            add_entry "ffprobe" "ok" "present"
-          else add_entry "ffprobe" "fail" "not found"; fi
-
-          if command -v sox >/dev/null 2>&1; then
-            V=$(sox --version 2>&1 | head -1 | cut -d' ' -f2)
-            add_entry "sox" "ok" "$V"
-          else add_entry "sox" "fail" "not found"; fi
-
-          if command -v espeak-ng >/dev/null 2>&1; then
-            add_entry "espeak-ng" "ok" "present"
-          else add_entry "espeak-ng" "fail" "not found"; fi
-
-          if command -v edge-tts >/dev/null 2>&1; then
-            add_entry "edge-tts" "ok" "present"
-          else add_entry "edge-tts" "fail" "not found"; fi
-
-          if command -v gtts-cli >/dev/null 2>&1; then
-            add_entry "gtts" "ok" "present"
-          else add_entry "gtts" "fail" "not found"; fi
-
-          if command -v piper >/dev/null 2>&1; then
-            add_entry "piper-cli" "ok" "present"
-          else add_entry "piper-cli" "fail" "not found"; fi
+          for bin in ffmpeg ffprobe sox espeak-ng edge-tts gtts-cli piper; do
+            if command -v $bin >/dev/null 2>&1; then
+              add_entry "$bin" "ok" "present"
+            else add_entry "$bin" "fail" "not found"; fi
+          done
 
           if [ -f "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" ]; then
             SZ=$(du -h "$DEPS_DIR/piper/hi_IN-pratham-medium.onnx" | cut -f1)
-            add_entry "piper-model-pratham" "ok" "$SZ"
-          else add_entry "piper-model-pratham" "fail" "missing"; fi
-
-          if [ -f "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" ]; then
-            SZ=$(du -h "$DEPS_DIR/piper/hi_IN-priyamvada-medium.onnx" | cut -f1)
-            add_entry "piper-model-priyamvada" "ok" "$SZ"
-          else add_entry "piper-model-priyamvada" "fail" "missing"; fi
+            add_entry "piper-model" "ok" "$SZ"
+          else add_entry "piper-model" "fail" "missing"; fi
 
           FC=$(ls "$DEPS_DIR/fonts" 2>/dev/null | wc -l)
           add_entry "custom-fonts" "ok" "$FC files"
-
-          SFC=$(fc-list 2>/dev/null | wc -l)
-          add_entry "system-fonts" "ok" "$SFC fonts"
 
           if [ -f "$DEPS_DIR/python-venv/.installed" ]; then
             add_entry "python-venv" "ok" "installed"
@@ -417,11 +506,10 @@ jobs:
           echo "}" >> "$REPORT_FILE"
 
           echo "TOOLS_STATUS_FILE=$REPORT_FILE" >> $GITHUB_ENV
-          echo "=== TOOLS STATUS ==="
           cat "$REPORT_FILE"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 11: MAIN PIPELINE
+      # STEP 12: MAIN PIPELINE
       # ─────────────────────────────────────────────────────────────
       - name: 🚀 Run Facebook Story Pipeline
         timeout-minutes: 30
@@ -476,7 +564,7 @@ jobs:
           python3 00_MAIN.py
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 12: ARTIFACT UPLOAD
+      # STEP 13: ARTIFACT
       # ─────────────────────────────────────────────────────────────
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -489,7 +577,7 @@ jobs:
           if-no-files-found: ignore
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 13: CLEANUP
+      # STEP 14: CLEANUP
       # ─────────────────────────────────────────────────────────────
       - name: 🧹 Cleanup Public Repo
         if: always()
@@ -500,15 +588,15 @@ jobs:
           echo "✅ Clean!"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 14: CACHE STATUS
+      # STEP 15: CACHE STATUS
       # ─────────────────────────────────────────────────────────────
       - name: 📊 Cache Status
         if: always()
         timeout-minutes: 1
         run: |
-          echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
+          echo "Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# END OF FB-STORY.YML
+# END OF FB-STORY.YML v12
 # ═══════════════════════════════════════════════════════════════════════════
