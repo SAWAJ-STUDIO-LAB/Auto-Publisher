@@ -1,0 +1,51 @@
+# ============================================
+# FILE: .github/workflows/setup_structure_01.yml
+# ============================================
+name: "🏗️ Setup Structure"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Folders & Files
+        run: |
+          set -e
+          mkdir -p social_media/shared
+          mkdir -p social_media/facebook
+          mkdir -p social_media/instagram
+          mkdir -p social_media/youtube
+          mkdir -p social_media/assets/logos
+          mkdir -p social_media/assets/fonts
+          mkdir -p social_media/assets/music
+          mkdir -p social_media/tests
+          mkdir -p social_media/output
+          mkdir -p social_media/temp
+          mkdir -p social_media/docs
+
+          touch social_media/shared/__init__.py
+          touch social_media/facebook/__init__.py
+          touch social_media/instagram/__init__.py
+          touch social_media/youtube/__init__.py
+          touch social_media/tests/__init__.py
+          touch social_media/assets/fonts/.gitkeep
+          touch social_media/assets/music/.gitkeep
+          touch social_media/output/.gitkeep
+          touch social_media/temp/.gitkeep
+
+          echo "✅ Folders & files created"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "🏗️ Setup structure"
+          git push
