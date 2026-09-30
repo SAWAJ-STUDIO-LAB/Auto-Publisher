@@ -195,5 +195,5 @@ jobs:
           
           git add .
           git status
-          git diff --staged --quiet || git commit -m "🏗️ Auto-setup complete SAWAJ-STUDIO-LAB architecture"
+          git diff --staged --quiet || git commit -m "🏗️️ Auto-setup complete SAWAJ-STUDIO-LAB architecture"
           git push origin main
