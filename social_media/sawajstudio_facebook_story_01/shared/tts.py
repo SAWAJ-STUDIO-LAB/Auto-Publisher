@@ -1,37 +1,68 @@
-import os, re, subprocess, requests
-from .session import get_session
+"""
+Text-to-Speech: ElevenLabs → edge-tts fallback.
+"""
+import os
+from shared.session import session
+from shared.telegram import api_status
+from shared.utils import sanitize, run_cmd
+from shared.logger import get_logger
 
-session = get_session()
+logger = get_logger("tts")
 
-def sanitize(t):
-    if not t: return ""
-    t = re.sub(r"[\u200b-\u200f\ufeff\u202a-\u202e]", "", str(t))
-    return t.replace("\"", "").replace("\x27", "").replace("\n", " ").strip()
+# Hindi male voice, matches original workflow
+ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
+EDGE_VOICE = "hi-IN-MadhurNeural"
 
-def gen_tts(text, outfile, rate="-9%", api_status=None):
+
+def gen_tts(text: str, outfile: str) -> bool:
+    """Generate TTS. Returns True on success."""
     text = sanitize(text)
+
+    # Try ElevenLabs first
     el = os.environ.get("ELEVENLABS_API_KEY")
     if el:
         try:
-            r = session.post("https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB",
-                             headers={"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": el},
-                             json={"text": text, "model_id": "eleven_multilingual_v2",
-                                   "voice_settings": {"stability": 0.42, "similarity_boost": 0.82, "style": 0.35, "use_speaker_boost": True}},
-                             timeout=70)
+            r = session.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
+                headers={
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": el,
+                },
+                json={
+                    "text": text,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.42,
+                        "similarity_boost": 0.82,
+                        "style": 0.35,
+                        "use_speaker_boost": True,
+                    },
+                },
+                timeout=50,
+            )
             if r.status_code == 200 and len(r.content) > 5000:
-                open(outfile, "wb").write(r.content)
-                if api_status is not None: api_status["TTS"]["ElevenLabs"] = "success"
+                with open(outfile, "wb") as f:
+                    f.write(r.content)
+                api_status["TTS"]["ElevenLabs"] = "success"
                 return True
-        except Exception:
-            pass
+            api_status["TTS"]["ElevenLabs"] = "failed"
+        except Exception as e:
+            api_status["TTS"]["ElevenLabs"] = f"failed ({str(e)[:35]})"
 
+    # Fallback to edge-tts
     try:
         tmp = outfile + ".txt"
-        open(tmp, "w", encoding="utf-8").write(text)
-        subprocess.run(f"edge-tts --file \"{tmp}\" --write-media \"{outfile}\" --voice hi-IN-MadhurNeural --rate={rate} --pitch=-2Hz --volume=+8%", shell=True, check=True)
-        if os.path.exists(tmp): os.remove(tmp)
-        if api_status is not None: api_status["TTS"]["edge-tts"] = "success"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        run_cmd(
+            f'edge-tts --file "{tmp}" --write-media "{outfile}" '
+            f'--voice {EDGE_VOICE} --rate=-7% --pitch=-2Hz --volume=+8%'
+        )
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        api_status["TTS"]["edge-tts"] = "success"
         return True
-    except Exception:
-        if api_status is not None: api_status["TTS"]["edge-tts"] = "failed"
+    except Exception as e:
+        api_status["TTS"]["edge-tts"] = f"failed ({str(e)[:35]})"
         return False
