@@ -1,25 +1,20 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# FACEBOOK STORY AUTOMATION WORKFLOW
+# FACEBOOK STORY AUTOMATION WORKFLOW (v11 - PRODUCTION READY)
 # ═══════════════════════════════════════════════════════════════════════════
-# KAAM: Yeh GitHub Actions workflow hai jo:
-#       1. Private repo se 7 Python files fetch karta hai
+# KAAM: Yeh workflow:
+#       1. Private repo se 7 Python files fetch karta hai (00_MAIN.py etc.)
 #       2. Saari dependencies (FFmpeg, fonts, Piper) cache se restore karta hai
-#       3. Python pipeline chalata hai (00_MAIN.py)
-#       4. Video render + upload karta hai
-#       5. Telegram par live report bhejta hai
+#       3. Python pipeline (00_MAIN.py) chalata hai
+#       4. Video render + Google Drive + Facebook Story upload karta hai
+#       5. Telegram par live 1-second report bhejta hai
 #
 # TRIGGER:
-#   - Manual: GitHub Actions UI se "Run workflow" button
+#   - Manual: GitHub Actions UI se "Run workflow"
 #   - Schedule: Roz 5:00 AM IST (23:30 UTC)
 #
 # RUNTIME:
 #   - Cached: ~3-4 minutes
 #   - First run: ~8-10 minutes
-#
-# KAB CHANGE KARNA HAI:
-#   - Cache version: CACHE_VERSION badlo (v11 → v12)
-#   - Naya env var: env section mein add karo
-#   - Naya step: steps section mein add karo
 # ═══════════════════════════════════════════════════════════════════════════
 
 # [01] Workflow ka naam
@@ -29,7 +24,7 @@ name: "🔵FACEBOOK STORY"
 # [02] TRIGGERS
 # ═══════════════════════════════════════════════════════════════════════════
 on:
-  # [03] Manual trigger — UI se "Run workflow" button
+  # [03] Manual trigger
   workflow_dispatch:
     inputs:
       upload_to_social:
@@ -38,7 +33,7 @@ on:
         type: boolean
         default: false
 
-  # [04] Auto trigger — roz 23:30 UTC = 5:00 AM IST
+  # [04] Auto trigger — roz 5 AM IST
   schedule:
     - cron: '30 23 * * *'
 
@@ -46,37 +41,36 @@ on:
 # [05] PERMISSIONS
 # ═══════════════════════════════════════════════════════════════════════════
 permissions:
-  contents: write   # Cleanup step ke liye
-  actions: write    # Cache write ke liye
+  contents: write
+  actions: write
 
 # ═══════════════════════════════════════════════════════════════════════════
-# [06] CONCURRENCY — Ek waqt mein sirf ek run
+# [06] CONCURRENCY
 # ═══════════════════════════════════════════════════════════════════════════
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
 # ═══════════════════════════════════════════════════════════════════════════
-# [07] JOB DEFINITION
+# [07] JOB
 # ═══════════════════════════════════════════════════════════════════════════
 jobs:
   fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
-    # [08] Global environment variables
+    # [08] Global env
     env:
-      CACHE_VERSION: v11                                  # ← Cache version (v11 naya)
-      DEPS_DIR: ${{ github.workspace }}/.dependencies     # Dependencies folder
+      CACHE_VERSION: v11
+      DEPS_DIR: ${{ github.workspace }}/.dependencies
 
     # ═══════════════════════════════════════════════════════════════════
     # [09] STEPS
     # ═══════════════════════════════════════════════════════════════════
     steps:
       # ─────────────────────────────────────────────────────────────
-      # STEP 1: PUBLIC REPO CHECKOUT
+      # STEP 1: CHECKOUT
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Public repo ko runner mein clone karo
       - name: ✅ Checkout Public Repository
         uses: actions/checkout@v4
         timeout-minutes: 2
@@ -84,9 +78,6 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # STEP 2: MASTER CACHE RESTORE
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Purane cache se dependencies restore karo
-      # CACHE HIT: Fast (~3 min run)
-      # CACHE MISS: Slow (~8-10 min first run)
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
         uses: actions/cache@v4
@@ -102,9 +93,8 @@ jobs:
             ${{ runner.os }}-fb-story-master-
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 3: DEPENDENCIES FOLDER STRUCTURE
+      # STEP 3: DEPENDENCIES FOLDER
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Saare folders create karo (bin, fonts, libs, piper, etc.)
       - name: 📁 Prepare Dependencies Folder
         timeout-minutes: 1
         run: |
@@ -113,10 +103,10 @@ jobs:
           echo "✅ Deps folder ready: $DEPS_DIR"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 4: PRIVATE REPO SE CODE FETCH (SPARSE + VERIFY) ✅
+      # STEP 4: PRIVATE REPO SE CODE FETCH (SPARSE + VERIFY)
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Private repo se 7 Python files fetch karo
-      # FIX: Token verify + sparse clone + timeout
+      # KAAM: Private repo se 7 Python files fetch karo (fast sparse clone)
+      # ═════════════════════════════════════════════════════════════════
       - name: 📥 Fetch Code from Private Repository
         timeout-minutes: 5
         env:
@@ -127,22 +117,18 @@ jobs:
           echo "🔐 Private repo se code laa rahe hain..."
           echo "📋 Token length: ${#TOKEN_GITHUB}"
 
-          # [10] Token empty check
           if [ -z "$TOKEN_GITHUB" ]; then
             echo "❌ TOKEN_GITHUB is empty!"
             exit 1
           fi
 
-          # [11] Token verify — repo access check
           echo "🔍 Testing repo access..."
           if ! git ls-remote https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git HEAD > /dev/null 2>&1; then
             echo "❌ Cannot access private repo. Token expired or invalid."
-            echo "⚠️ Please regenerate TOKEN_GITHUB with 'repo' scope"
             exit 1
           fi
           echo "✅ Repo access OK!"
 
-          # [12] Sparse clone (fast — sirf zaroori folder)
           echo "📥 Sparse cloning..."
           GIT_TERMINAL_PROMPT=0 git clone --depth 1 --filter=blob:none --sparse \
             https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git \
@@ -154,7 +140,6 @@ jobs:
 
           echo "✅ Clone done!"
 
-          # [13] Files copy karo
           TARGET_DIR="Social media/Facebook/Facebook Story"
           mkdir -p "$TARGET_DIR"
 
@@ -164,11 +149,9 @@ jobs:
 
           rm -rf temp_private_repo
 
-          # [14] Verify files
           echo "✅ Files copied:"
           ls -la "$TARGET_DIR/"
 
-          # [15] Filename check (uppercase rakhna hai kyunki imports uppercase hain)
           echo "🔍 Verifying files..."
           for f in 00_MAIN.py 01_CONFIG.py 02_UTILS.py 03_FETCHERS.py 04_VOICE.py 05_RENDER.py 06_UPLOAD.py; do
             if [ ! -f "$TARGET_DIR/$f" ]; then
@@ -179,9 +162,8 @@ jobs:
           echo "✅ All files present!"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 5: PYTHON RUNTIME SETUP
+      # STEP 5: PYTHON SETUP
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Python 3.11 install karo
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         timeout-minutes: 2
@@ -189,17 +171,14 @@ jobs:
           python-version: '3.11'
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 6: FFMPEG + SYSTEM FONTS (WITH LIBS) ✅
+      # STEP 6: FFMPEG + FONTS (WITH LIBS)
       # ─────────────────────────────────────────────────────────────
-      # KAAM: FFmpeg, SoX, espeak-ng install karo
-      # FIX: Shared libraries bhi cache mein save/restore
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
         timeout-minutes: 10
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           LIBS_DIR="$DEPS_DIR/libs"
 
-          # [16] CACHE HIT path
           if [ -f "$MARKER" ] && \
              [ -f "$DEPS_DIR/bin/ffmpeg" ] && \
              [ -f "$DEPS_DIR/bin/sox" ] && \
@@ -219,7 +198,6 @@ jobs:
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
 
-            # [17] Shared libraries restore
             sudo cp -r "$LIBS_DIR/"* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
             sudo ldconfig
 
@@ -228,7 +206,6 @@ jobs:
               sudo fc-cache -f > /dev/null 2>&1 || true
             fi
 
-            # [18] Safety net — agar cached binaries broken hain
             if ! ffmpeg -version > /dev/null 2>&1 || ! sox --version > /dev/null 2>&1; then
               echo "⚠️ Cached binaries broken — falling back to apt install..."
               sudo apt-get update -q
@@ -236,7 +213,6 @@ jobs:
               sudo ldconfig
             fi
 
-          # [19] CACHE MISS path
           else
             echo "📥 FFmpeg + SoX + espeak-ng install (fresh)..."
 
@@ -250,7 +226,6 @@ jobs:
             cp "$(which sox)" "$DEPS_DIR/bin/sox"
             cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
 
-            # [20] Shared libraries save
             mkdir -p "$LIBS_DIR"
             for bin in ffmpeg ffprobe sox espeak-ng; do
               ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
@@ -259,7 +234,7 @@ jobs:
                 fi
               done
             done
-            echo "📚 Saved $(ls $LIBS_DIR 2>/dev/null | wc -l) libraries to cache"
+            echo "📚 Saved $(ls $LIBS_DIR 2>/dev/null | wc -l) libraries"
 
             mkdir -p "$DEPS_DIR/system-fonts/truetype"
             cp -r /usr/share/fonts/truetype/* "$DEPS_DIR/system-fonts/truetype/" 2>/dev/null || true
@@ -268,12 +243,11 @@ jobs:
               touch "$MARKER"
               echo "✅ FFmpeg + SoX + libs cached successfully!"
             else
-              echo "❌ Verification failed — cache NOT saved"
+              echo "❌ Verification failed"
               exit 1
             fi
           fi
 
-          # [21] Final verify
           echo "🔍 Verifying tools..."
           ffmpeg -version | head -1 || (echo "❌ ffmpeg broken" && exit 1)
           sox --version || (echo "❌ sox broken" && exit 1)
@@ -282,14 +256,13 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # STEP 7: CUSTOM FONTS
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Hindi, Arabic, English fonts download
       - name: 🔤 Custom Fonts (Cache-Aware)
         timeout-minutes: 5
         run: |
           if [ -f "$DEPS_DIR/.fonts_ok" ] && [ "$(ls -A $DEPS_DIR/fonts 2>/dev/null | wc -l)" -ge 6 ]; then
-            echo "⚡ Custom fonts CACHED — skipping download!"
+            echo "⚡ Custom fonts CACHED!"
           else
-            echo "📥 Custom fonts download (pehli baar)..."
+            echo "📥 Custom fonts download..."
             mkdir -p "$DEPS_DIR/fonts"
 
             declare -A FONTS=(
@@ -314,18 +287,17 @@ jobs:
           fc-cache -f > /dev/null 2>&1 || true
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 8: PYTHON PACKAGES (VENV)
+      # STEP 8: PYTHON PACKAGES
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Python packages install karo (isolated venv mein)
       - name: 🐍 Python Packages (Cache-Aware)
         timeout-minutes: 10
         run: |
           VENV="$DEPS_DIR/python-venv"
 
           if [ -f "$VENV/.installed" ] && "$VENV/bin/python" -c "import edge_tts, PIL, mutagen, gtts" 2>/dev/null; then
-            echo "⚡ Python packages CACHED — skipping pip!"
+            echo "⚡ Python packages CACHED!"
           else
-            echo "📥 Python packages install (pehli baar)..."
+            echo "📥 Python packages install..."
             rm -rf "$VENV"
             python3 -m venv "$VENV"
             "$VENV/bin/pip" install --upgrade pip --quiet
@@ -342,9 +314,8 @@ jobs:
           echo "$VENV/bin" >> $GITHUB_PATH
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 9: PIPER TTS MODELS
+      # STEP 9: PIPER MODELS
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Offline Piper TTS models download
       - name: 🎙️ Piper Models (Cache-Aware)
         timeout-minutes: 10
         run: |
@@ -353,7 +324,7 @@ jobs:
           if [ -f "$P/.installed" ] && [ -f "$P/hi_IN-pratham-medium.onnx" ]; then
             echo "⚡ Piper models CACHED!"
           else
-            echo "📥 Piper models download (pehli baar)..."
+            echo "📥 Piper models download..."
             rm -rf "$P" && mkdir -p "$P"
             cd "$P"
 
@@ -372,9 +343,8 @@ jobs:
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 10: MASTER TOOL HEALTH CHECK
+      # STEP 10: TOOL HEALTH CHECK
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Saare tools check karo + JSON report banao
       - name: 🔍 Master Tool Health Check
         id: health
         timeout-minutes: 2
@@ -412,8 +382,7 @@ jobs:
           else add_entry "espeak-ng" "fail" "not found"; fi
 
           if command -v edge-tts >/dev/null 2>&1; then
-            V=$(edge-tts --version 2>&1 | head -1 || echo "present")
-            add_entry "edge-tts" "ok" "$V"
+            add_entry "edge-tts" "ok" "present"
           else add_entry "edge-tts" "fail" "not found"; fi
 
           if command -v gtts-cli >/dev/null 2>&1; then
@@ -444,19 +413,6 @@ jobs:
             add_entry "python-venv" "ok" "installed"
           else add_entry "python-venv" "fail" "missing"; fi
 
-          for key in OPENROUTER_API_KEY GROQ_API_KEY GEMINI_API_KEY MISTRAL_API_KEY \
-                     CEREBRAS_API_KEY COHERE_API_KEY HUGGINGFACE_API_KEY \
-                     ELEVENLABS_API_KEY AZURE_SPEECH_KEY GOOGLE_CLOUD_TTS_KEY \
-                     AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
-                     DEEPL_API_KEY FREESOUND_API_KEY PEXELS_API_KEY PIXABAY_API_KEY \
-                     TELEGRAM_BOT_TOKEN FACEBOOK_INSTAGRAM_META_TOKEN; do
-            if [ -n "${!key:-}" ]; then
-              add_entry "key:$key" "ok" "configured"
-            else
-              add_entry "key:$key" "hold" "not set"
-            fi
-          done
-
           echo "  }" >> "$REPORT_FILE"
           echo "}" >> "$REPORT_FILE"
 
@@ -465,9 +421,8 @@ jobs:
           cat "$REPORT_FILE"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 11: MAIN PYTHON PIPELINE
+      # STEP 11: MAIN PIPELINE
       # ─────────────────────────────────────────────────────────────
-      # KAAM: 00_MAIN.py chalao — pipeline
       - name: 🚀 Run Facebook Story Pipeline
         timeout-minutes: 30
         env:
@@ -523,7 +478,6 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # STEP 12: ARTIFACT UPLOAD
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Video ko GitHub Actions artifact ke roop mein save karo (5 din)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         timeout-minutes: 5
@@ -535,9 +489,8 @@ jobs:
           if-no-files-found: ignore
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 13: SECURITY CLEANUP
+      # STEP 13: CLEANUP
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Public repo se private files delete karo (security)
       - name: 🧹 Cleanup Public Repo
         if: always()
         timeout-minutes: 1
@@ -547,9 +500,8 @@ jobs:
           echo "✅ Clean!"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 14: CACHE STATUS REPORT
+      # STEP 14: CACHE STATUS
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Cache info workflow log mein print karo (debug)
       - name: 📊 Cache Status
         if: always()
         timeout-minutes: 1
