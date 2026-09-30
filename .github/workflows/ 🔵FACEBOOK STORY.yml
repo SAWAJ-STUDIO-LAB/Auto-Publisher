@@ -1,5 +1,3 @@
-# FACEBOOK STORY AUTOMATION — v12
-
 name: "🔵FACEBOOK STORY"
 
 on:
@@ -114,7 +112,7 @@ jobs:
 
           rm -rf temp_private_repo
 
-          for f in 00_MAIN.py 01_CONFIG.py 02_UTILS.py 03_FETCHERS.py 04_VOICE.py 05_RENDER.py 06_UPLOAD.py; do
+          for f in MAIN_00.py CONFIG_01.py UTILS_02.py FETCHERS_03.py VOICE_04.py RENDER_05.py UPLOAD_06.py; do
             if [ ! -f "$TARGET_DIR/$f" ]; then
               echo "❌ Missing: $f"
               ls -la "$TARGET_DIR/"
@@ -311,7 +309,7 @@ jobs:
           TOOLS_STATUS_FILE: ${{ env.DEPS_DIR }}/tools_status.json
         run: |
           cd "Social media/Facebook/Facebook Story"
-          python3 00_MAIN.py
+          python3 MAIN_00.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
