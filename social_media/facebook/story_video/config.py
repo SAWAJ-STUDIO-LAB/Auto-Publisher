@@ -1,11 +1,8 @@
-"""Config — reads env variables."""
+"""Config — reads env variables. No logger import (avoids circular)."""
 import os
-from logger import log_file_start, log_file_end, log_step
 
 
 class Config:
-    log_file_start("config.py", "Load environment variables")
-
     TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -40,32 +37,3 @@ class Config:
     @property
     def should_post_social(self):
         return (self.EVENT_NAME == "schedule") or self.UPLOAD_TO_SOCIAL
-
-
-def _check_env():
-    checks = [
-        ("Telegram Token", Config.TG_TOKEN),
-        ("Telegram Chat ID", Config.TG_CHAT_ID),
-        ("Facebook Meta Token", Config.META_TOKEN),
-        ("Facebook Page ID", Config.PAGE_ID),
-        ("Google Drive Refresh", Config.DRIVE_REFRESH_TOKEN),
-        ("At least 1 AI Key", any([
-            Config.OPENROUTER_API_KEY, Config.GROQ_API_KEY,
-            Config.GEMINI_API_KEY, Config.MISTRAL_API_KEY,
-            Config.CEREBRAS_API_KEY, Config.COHERE_API_KEY,
-        ])),
-        ("ElevenLabs Key", Config.ELEVENLABS_API_KEY),
-        ("Pexels Key", Config.PEXELS_API_KEY),
-    ]
-    for name, val in checks:
-        if val:
-            log_step("config.py", f"ENV: {name}", "ok", "present")
-        else:
-            log_step("config.py", f"ENV: {name}", "warn", "missing (fallback)")
-
-    log_step("config.py", "should_post_social", "info",
-             str(Config().should_post_social))
-    log_file_end("config.py", "success", "Config loaded")
-
-
-_check_env()
