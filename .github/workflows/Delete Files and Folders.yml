@@ -85,6 +85,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GITHUB }}
 
       - name: Configure Git Identity
         run: |
@@ -111,6 +113,7 @@ jobs:
 
       - name: Commit and Push Changes
         run: |
+          git remote set-url origin https://x-access-token:${{ secrets.TOKEN_GITHUB }}@github.com/${{ github.repository }}.git
           git status
           git add .
           git commit -m "Automated deletion of selected files/folders via GitHub Actions" || echo "No changes to commit"
