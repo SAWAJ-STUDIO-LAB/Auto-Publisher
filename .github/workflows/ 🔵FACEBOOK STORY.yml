@@ -40,7 +40,12 @@ jobs:
           GH_TOKEN: ${{ secrets.TOKEN_GITHUB }}
           REPO: ${{ github.repository }}
           CACHE_VERSION: ${{ env.CACHE_VERSION }}
-        run: python3 CLEANUP_CACHE.py
+        run: |
+          if [ -f "CLEANUP_CACHE.py" ]; then
+            python3 CLEANUP_CACHE.py
+          else
+            echo "⚠️️ CLEANUP_CACHE.py nahi mili, cleanup step safely skip kiya gaya."
+          fi
 
       - name: 🗂️ Restore Cache
         id: master-cache
