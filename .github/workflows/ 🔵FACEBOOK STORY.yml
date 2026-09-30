@@ -1,6 +1,35 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# FACEBOOK STORY AUTOMATION WORKFLOW
+# ═══════════════════════════════════════════════════════════════════════════
+# KAAM: Yeh GitHub Actions workflow hai jo:
+#       1. Private repo se 7 Python files fetch karta hai
+#       2. Saari dependencies (FFmpeg, fonts, Piper) cache se restore karta hai
+#       3. Python pipeline chalata hai (00_MAIN.py)
+#       4. Video render + upload karta hai
+#       5. Telegram par live report bhejta hai
+#
+# TRIGGER:
+#   - Manual: GitHub Actions UI se "Run workflow" button
+#   - Schedule: Roz 5:00 AM IST (23:30 UTC)
+#
+# RUNTIME:
+#   - Cached: ~3-4 minutes
+#   - First run: ~8-10 minutes
+#
+# KAB CHANGE KARNA HAI:
+#   - Cache version: CACHE_VERSION badlo (v11 → v12)
+#   - Naya env var: env section mein add karo
+#   - Naya step: steps section mein add karo
+# ═══════════════════════════════════════════════════════════════════════════
+
+# [01] Workflow ka naam
 name: "🔵FACEBOOK STORY"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [02] TRIGGERS
+# ═══════════════════════════════════════════════════════════════════════════
 on:
+  # [03] Manual trigger — UI se "Run workflow" button
   workflow_dispatch:
     inputs:
       upload_to_social:
@@ -9,37 +38,55 @@ on:
         type: boolean
         default: false
 
+  # [04] Auto trigger — roz 23:30 UTC = 5:00 AM IST
   schedule:
     - cron: '30 23 * * *'
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [05] PERMISSIONS
+# ═══════════════════════════════════════════════════════════════════════════
 permissions:
-  contents: write
-  actions: write
+  contents: write   # Cleanup step ke liye
+  actions: write    # Cache write ke liye
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [06] CONCURRENCY — Ek waqt mein sirf ek run
+# ═══════════════════════════════════════════════════════════════════════════
 concurrency:
   group: facebook-story
   cancel-in-progress: false
 
+# ═══════════════════════════════════════════════════════════════════════════
+# [07] JOB DEFINITION
+# ═══════════════════════════════════════════════════════════════════════════
 jobs:
   fb-story:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    # [08] Global environment variables
     env:
-      CACHE_VERSION: v9
-      DEPS_DIR: ${{ github.workspace }}/.dependencies
+      CACHE_VERSION: v11                                  # ← Cache version (v11 naya)
+      DEPS_DIR: ${{ github.workspace }}/.dependencies     # Dependencies folder
 
+    # ═══════════════════════════════════════════════════════════════════
+    # [09] STEPS
+    # ═══════════════════════════════════════════════════════════════════
     steps:
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 1] REPO CHECKOUT
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 1: PUBLIC REPO CHECKOUT
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Public repo ko runner mein clone karo
       - name: ✅ Checkout Public Repository
         uses: actions/checkout@v4
         timeout-minutes: 2
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 2] MASTER CACHE RESTORE
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 2: MASTER CACHE RESTORE
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Purane cache se dependencies restore karo
+      # CACHE HIT: Fast (~3 min run)
+      # CACHE MISS: Slow (~8-10 min first run)
       - name: 🗂️ Restore Master Dependencies Cache
         id: master-cache
         uses: actions/cache@v4
@@ -54,9 +101,10 @@ jobs:
             ${{ runner.os }}-fb-story-master-${{ env.CACHE_VERSION }}-
             ${{ runner.os }}-fb-story-master-
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 3] DEPENDENCIES FOLDER STRUCTURE
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 3: DEPENDENCIES FOLDER STRUCTURE
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Saare folders create karo (bin, fonts, libs, piper, etc.)
       - name: 📁 Prepare Dependencies Folder
         timeout-minutes: 1
         run: |
@@ -64,13 +112,12 @@ jobs:
           echo "DEPS_DIR=$DEPS_DIR" >> $GITHUB_ENV
           echo "✅ Deps folder ready: $DEPS_DIR"
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 4] PRIVATE REPO SE CODE FETCH (SPARSE + FAST) ✅ FIXED
-      # ═════════════════════════════════════════════════════════════════════
-      # FIX: Sparse checkout + token verify + timeout + filename check
-      #      Ab hang nahi hoga, 3 min mein complete hoga.
-      # ═════════════════════════════════════════════════════════════════════
-      - name: 📥 Fetch Code from Private Repository (Sparse)
+      # ─────────────────────────────────────────────────────────────
+      # STEP 4: PRIVATE REPO SE CODE FETCH (SPARSE + VERIFY) ✅
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Private repo se 7 Python files fetch karo
+      # FIX: Token verify + sparse clone + timeout
+      - name: 📥 Fetch Code from Private Repository
         timeout-minutes: 5
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
@@ -80,21 +127,23 @@ jobs:
           echo "🔐 Private repo se code laa rahe hain..."
           echo "📋 Token length: ${#TOKEN_GITHUB}"
 
-          # ─── STEP 1: Token verify ───
+          # [10] Token empty check
           if [ -z "$TOKEN_GITHUB" ]; then
             echo "❌ TOKEN_GITHUB is empty!"
             exit 1
           fi
 
+          # [11] Token verify — repo access check
           echo "🔍 Testing repo access..."
           if ! git ls-remote https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git HEAD > /dev/null 2>&1; then
-            echo "❌ Cannot access private repo. Token may be invalid/expired."
+            echo "❌ Cannot access private repo. Token expired or invalid."
+            echo "⚠️ Please regenerate TOKEN_GITHUB with 'repo' scope"
             exit 1
           fi
           echo "✅ Repo access OK!"
 
-          # ─── STEP 2: Sparse clone (fast — sirf zaroori folder) ───
-          echo "📥 Sparse cloning (only needed folder)..."
+          # [12] Sparse clone (fast — sirf zaroori folder)
+          echo "📥 Sparse cloning..."
           GIT_TERMINAL_PROMPT=0 git clone --depth 1 --filter=blob:none --sparse \
             https://x-access-token:${TOKEN_GITHUB}@github.com/${PRIVATE_REPO}.git \
             temp_private_repo
@@ -103,69 +152,54 @@ jobs:
           git sparse-checkout set "Social media/Facebook"
           cd ..
 
-          echo "✅ Clone done! Size: $(du -sh temp_private_repo | cut -f1)"
+          echo "✅ Clone done!"
 
-          # ─── STEP 3: Copy files ───
+          # [13] Files copy karo
           TARGET_DIR="Social media/Facebook/Facebook Story"
           mkdir -p "$TARGET_DIR"
 
           if [ -d "temp_private_repo/Social media/Facebook/Facebook Story" ]; then
             cp -r "temp_private_repo/Social media/Facebook/Facebook Story/"* "$TARGET_DIR/"
-          elif [ -d "temp_private_repo/Social media/Facebook" ]; then
-            cp "temp_private_repo/Social media/Facebook/"*.py "$TARGET_DIR/" 2>/dev/null || true
           fi
 
           rm -rf temp_private_repo
 
+          # [14] Verify files
           echo "✅ Files copied:"
           ls -la "$TARGET_DIR/"
 
-          # ─── STEP 4: Filename verify (lowercase check) ───
-          echo "🔍 Verifying filenames..."
-          MISSING=0
-          for f in 00_main.py 01_config.py 02_utils.py 03_fetchers.py 04_voice.py 05_render.py 06_upload.py; do
+          # [15] Filename check (uppercase rakhna hai kyunki imports uppercase hain)
+          echo "🔍 Verifying files..."
+          for f in 00_MAIN.py 01_CONFIG.py 02_UTILS.py 03_FETCHERS.py 04_VOICE.py 05_RENDER.py 06_UPLOAD.py; do
             if [ ! -f "$TARGET_DIR/$f" ]; then
               echo "❌ Missing: $f"
-              MISSING=1
+              exit 1
             fi
           done
+          echo "✅ All files present!"
 
-          if [ $MISSING -eq 1 ]; then
-            echo ""
-            echo "⚠️ UPPERCASE files detected! Renaming..."
-            cd "$TARGET_DIR"
-            for f in *.PY; do
-              if [ -f "$f" ]; then
-                NEW=$(echo "$f" | tr '[:upper:]' '[:lower:]')
-                mv "$f" "$NEW"
-                echo "   $f → $NEW"
-              fi
-            done
-            cd "$GITHUB_WORKSPACE"
-          fi
-
-          echo "✅ Final files:"
-          ls -la "$TARGET_DIR/"
-
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 5] PYTHON RUNTIME SETUP
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 5: PYTHON RUNTIME SETUP
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Python 3.11 install karo
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         timeout-minutes: 2
         with:
           python-version: '3.11'
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 6] FFmpeg + System Fonts (CACHE-AWARE — WITH LIBS) ✅ FIXED
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 6: FFMPEG + SYSTEM FONTS (WITH LIBS) ✅
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: FFmpeg, SoX, espeak-ng install karo
+      # FIX: Shared libraries bhi cache mein save/restore
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
         timeout-minutes: 10
         run: |
           MARKER="$DEPS_DIR/.ffmpeg_ok"
           LIBS_DIR="$DEPS_DIR/libs"
 
-          # ─── CACHE HIT PATH ───
+          # [16] CACHE HIT path
           if [ -f "$MARKER" ] && \
              [ -f "$DEPS_DIR/bin/ffmpeg" ] && \
              [ -f "$DEPS_DIR/bin/sox" ] && \
@@ -185,7 +219,7 @@ jobs:
               sudo chmod +x /usr/local/bin/espeak-ng
             fi
 
-            # ✅ Shared libraries restore
+            # [17] Shared libraries restore
             sudo cp -r "$LIBS_DIR/"* /usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
             sudo ldconfig
 
@@ -194,7 +228,7 @@ jobs:
               sudo fc-cache -f > /dev/null 2>&1 || true
             fi
 
-            # Safety net
+            # [18] Safety net — agar cached binaries broken hain
             if ! ffmpeg -version > /dev/null 2>&1 || ! sox --version > /dev/null 2>&1; then
               echo "⚠️ Cached binaries broken — falling back to apt install..."
               sudo apt-get update -q
@@ -202,7 +236,7 @@ jobs:
               sudo ldconfig
             fi
 
-          # ─── CACHE MISS PATH ───
+          # [19] CACHE MISS path
           else
             echo "📥 FFmpeg + SoX + espeak-ng install (fresh)..."
 
@@ -216,7 +250,7 @@ jobs:
             cp "$(which sox)" "$DEPS_DIR/bin/sox"
             cp "$(which espeak-ng)" "$DEPS_DIR/bin/espeak-ng" || true
 
-            # ✅ Shared libraries save
+            # [20] Shared libraries save
             mkdir -p "$LIBS_DIR"
             for bin in ffmpeg ffprobe sox espeak-ng; do
               ldd "$(which $bin)" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
@@ -239,14 +273,16 @@ jobs:
             fi
           fi
 
+          # [21] Final verify
           echo "🔍 Verifying tools..."
           ffmpeg -version | head -1 || (echo "❌ ffmpeg broken" && exit 1)
           sox --version || (echo "❌ sox broken" && exit 1)
           echo "✅ All tools working!"
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 7] CUSTOM FONTS (CACHE-AWARE)
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 7: CUSTOM FONTS
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Hindi, Arabic, English fonts download
       - name: 🔤 Custom Fonts (Cache-Aware)
         timeout-minutes: 5
         run: |
@@ -277,9 +313,10 @@ jobs:
           cp "$DEPS_DIR/fonts/"*.ttf ~/.fonts/ 2>/dev/null || true
           fc-cache -f > /dev/null 2>&1 || true
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 8] PYTHON PACKAGES VENV (CACHE-AWARE)
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 8: PYTHON PACKAGES (VENV)
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Python packages install karo (isolated venv mein)
       - name: 🐍 Python Packages (Cache-Aware)
         timeout-minutes: 10
         run: |
@@ -304,9 +341,10 @@ jobs:
 
           echo "$VENV/bin" >> $GITHUB_PATH
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 9] PIPER TTS MODELS (CACHE-AWARE)
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 9: PIPER TTS MODELS
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Offline Piper TTS models download
       - name: 🎙️ Piper Models (Cache-Aware)
         timeout-minutes: 10
         run: |
@@ -333,9 +371,10 @@ jobs:
 
           echo "PIPER_DIR=$P" >> $GITHUB_ENV
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 10] MASTER TOOL HEALTH CHECK
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 10: MASTER TOOL HEALTH CHECK
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Saare tools check karo + JSON report banao
       - name: 🔍 Master Tool Health Check
         id: health
         timeout-minutes: 2
@@ -425,9 +464,10 @@ jobs:
           echo "=== TOOLS STATUS ==="
           cat "$REPORT_FILE"
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 11] MAIN PYTHON PIPELINE
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 11: MAIN PYTHON PIPELINE
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: 00_MAIN.py chalao — pipeline
       - name: 🚀 Run Facebook Story Pipeline
         timeout-minutes: 30
         env:
@@ -478,11 +518,12 @@ jobs:
         run: |
           cd "Social media/Facebook/Facebook Story"
           ls -la
-          python3 00_main.py
+          python3 00_MAIN.py
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 12] ARTIFACT UPLOAD
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 12: ARTIFACT UPLOAD
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Video ko GitHub Actions artifact ke roop mein save karo (5 din)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         timeout-minutes: 5
@@ -493,9 +534,10 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 13] SECURITY CLEANUP
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 13: SECURITY CLEANUP
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Public repo se private files delete karo (security)
       - name: 🧹 Cleanup Public Repo
         if: always()
         timeout-minutes: 1
@@ -504,12 +546,17 @@ jobs:
           rm -f Final_FB_Story.mp4
           echo "✅ Clean!"
 
-      # ═════════════════════════════════════════════════════════════════════
-      # [STEP 14] CACHE STATUS REPORT
-      # ═════════════════════════════════════════════════════════════════════
+      # ─────────────────────────────────────────────────────────────
+      # STEP 14: CACHE STATUS REPORT
+      # ─────────────────────────────────────────────────────────────
+      # KAAM: Cache info workflow log mein print karo (debug)
       - name: 📊 Cache Status
         if: always()
         timeout-minutes: 1
         run: |
           echo "Master Cache Hit: ${{ steps.master-cache.outputs.cache-hit }}"
           du -sh $DEPS_DIR 2>/dev/null || echo "no cache"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# END OF FB-STORY.YML
+# ═══════════════════════════════════════════════════════════════════════════
