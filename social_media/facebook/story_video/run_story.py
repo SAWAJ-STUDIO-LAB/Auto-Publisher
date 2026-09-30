@@ -7,10 +7,11 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from telegram import send_tg, header, summary
-from logger import log_error
 
-if __name__ == "__main__":
+def main():
+    from telegram import send_tg, header, summary
+    from logger import log_error
+
     header("🚀 FACEBOOK STORY RUNNER")
     send_tg("▶️ <b>Runner started</b>")
     try:
@@ -24,3 +25,7 @@ if __name__ == "__main__":
         send_tg(f"💥 <b>RUNNER FAILED</b>\n{str(e)[:200]}")
         summary()
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
