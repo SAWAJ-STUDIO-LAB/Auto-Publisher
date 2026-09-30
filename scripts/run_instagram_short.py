@@ -1,1 +1,0 @@
-# Run Instagram Short script
