@@ -1,4 +1,4 @@
-Name: Generate Folder Structure
+name: Generate Folder Structure
 
 on:
   workflow_dispatch:
