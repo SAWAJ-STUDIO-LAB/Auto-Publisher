@@ -1,1 +1,0 @@
-# SAWAJ Studio Lab

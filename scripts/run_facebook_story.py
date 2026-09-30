@@ -1,1 +1,0 @@
-# Run Facebook Story script
