@@ -1,13 +1,14 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# FACEBOOK STORY AUTOMATION WORKFLOW (v12 — AUTO CACHE CLEANUP)
+# FACEBOOK STORY AUTOMATION WORKFLOW (v12 — PRODUCTION READY)
 # ═══════════════════════════════════════════════════════════════════════════
 # KAAM: Private repo se code fetch karo, video render karo, upload karo.
 #
 # FIXES IN v12:
-#   1. Token check bug fix — API se verify pehle
-#   2. Auto cache cleanup — purane cache khud delete honge
-#   3. Debug output — exact error pata chalega
+#   1. Token verify via API (debug output)
+#   2. Auto cache cleanup (alag Python file se)
+#   3. FFmpeg libs included
 #   4. Better error messages
+#   5. Sparse clone (fast)
 # ═══════════════════════════════════════════════════════════════════════════
 
 name: "🔵FACEBOOK STORY"
@@ -26,7 +27,7 @@ on:
 
 permissions:
   contents: write
-  actions: write      # ← Cache delete karne ke liye zaroori
+  actions: write
 
 concurrency:
   group: facebook-story
@@ -50,114 +51,16 @@ jobs:
         timeout-minutes: 2
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 2: AUTO CACHE CLEANUP 🧹
+      # STEP 2: AUTO CACHE CLEANUP (alag Python file se)
       # ─────────────────────────────────────────────────────────────
-      # KAAM: Purane cache automatically delete karo
-      # 
-      # KYA DELETES:
-      #   - 7 din se purane saare cache
-      #   - Purane CACHE_VERSION wale cache (v10, v11 etc.)
-      #
-      # KAISE:
-      #   - GitHub API se cache list nikalo
-      #   - Purane wale delete karo
-      # ═════════════════════════════════════════════════════════════
-      - name: 🧹 Auto Cache Cleanup (Purane cache delete)
+      - name: 🧹 Auto Cache Cleanup
         if: always()
         timeout-minutes: 3
         env:
           GH_TOKEN: ${{ secrets.TOKEN_GITHUB }}
           REPO: ${{ github.repository }}
-        run: |
-          echo "🧹 Auto Cache Cleanup shuru..."
-          echo "📦 Current cache version: $CACHE_VERSION"
-          echo ""
-
-          # ─── Step 1: Saare caches list karo ───
-          CACHES=$(curl -s \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/actions/caches?per_page=100")
-
-          # ─── Step 2: Cache count print karo ───
-          TOTAL=$(echo "$CACHES" | grep -c '"id":' || echo "0")
-          echo "📊 Total caches found: $TOTAL"
-          echo ""
-
-          if [ "$TOTAL" -eq 0 ]; then
-            echo "✅ Koi cache nahi hai — cleanup skip"
-            exit 0
-          fi
-
-          # ─── Step 3: Har cache check karo ───
-          echo "$CACHES" | python3 -c "
-import sys, json, subprocess
-from datetime import datetime, timezone, timedelta
-
-try:
-    data = json.load(sys.stdin)
-except:
-    print('⚠️ JSON parse failed')
-    sys.exit(0)
-
-caches = data.get('actions_caches', [])
-print(f'Found {len(caches)} caches')
-print('')
-
-current_version = '$CACHE_VERSION'
-now = datetime.now(timezone.utc)
-deleted = 0
-kept = 0
-
-for cache in caches:
-    cache_id = cache.get('id')
-    cache_key = cache.get('key', '')
-    cache_size = cache.get('size_in_bytes', 0) / (1024*1024)  # MB
-    
-    # Cache banaya kab
-    created_str = cache.get('created_at', '')
-    try:
-        created = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-        days_old = (now - created).days
-    except:
-        days_old = 999
-    
-    # ─── Delete rules ───
-    should_delete = False
-    reason = ''
-    
-    # Rule 1: 7 din se purana
-    if days_old >= 7:
-        should_delete = True
-        reason = f'{days_old} days old'
-    
-    # Rule 2: Purana version (v10, v11) — current v12
-    elif not cache_key.startswith(f'Linux-fb-story-master-{current_version}'):
-        should_delete = True
-        reason = f'old version'
-    
-    if should_delete:
-        print(f'🗑️  Deleting: {cache_key[:60]}')
-        print(f'   Size: {cache_size:.1f} MB | Age: {days_old} days | Reason: {reason}')
-        try:
-            result = subprocess.run([
-                'curl', '-s', '-X', 'DELETE',
-                '-H', f'Authorization: token {cache_key and \"\"}',
-                f'https://api.github.com/repos/$REPO/actions/caches/{cache_id}'
-            ], capture_output=True, text=True, env={'GH_TOKEN': '$GH_TOKEN'})
-            deleted += 1
-        except Exception as e:
-            print(f'   ⚠️ Delete failed: {e}')
-    else:
-        print(f'✅ Keeping: {cache_key[:60]} (current version, {days_old} days old)')
-        kept += 1
-
-print('')
-print(f'📊 Summary: Deleted {deleted} | Kept {kept}')
-"
-
-          echo ""
-          echo "✅ Auto cache cleanup complete!"
+          CACHE_VERSION: ${{ env.CACHE_VERSION }}
+        run: python3 CLEANUP_CACHE.py
 
       # ─────────────────────────────────────────────────────────────
       # STEP 3: MASTER CACHE RESTORE
@@ -187,7 +90,7 @@ print(f'📊 Summary: Deleted {deleted} | Kept {kept}')
           echo "✅ Deps folder ready: $DEPS_DIR"
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 5: PRIVATE REPO FETCH (TOKEN FIXED ✅)
+      # STEP 5: PRIVATE REPO FETCH (TOKEN FIXED)
       # ─────────────────────────────────────────────────────────────
       - name: 📥 Fetch Code from Private Repository
         timeout-minutes: 10
@@ -295,7 +198,7 @@ print(f'📊 Summary: Deleted {deleted} | Kept {kept}')
           python-version: '3.11'
 
       # ─────────────────────────────────────────────────────────────
-      # STEP 7: FFMPEG
+      # STEP 7: FFMPEG + FONTS
       # ─────────────────────────────────────────────────────────────
       - name: 🎬 FFmpeg + System Fonts (Cache-Aware — with Libs)
         timeout-minutes: 10
