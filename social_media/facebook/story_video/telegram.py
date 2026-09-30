@@ -2,7 +2,6 @@
 import time
 import requests
 from datetime import datetime
-from config import Config
 
 _session = requests.Session()
 
@@ -14,13 +13,20 @@ def _now():
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _creds():
+    """Lazy read config to avoid circular import."""
+    import os
+    return os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+
+
 def send_tg(msg, silent=False):
-    if Config.TG_TOKEN and Config.TG_CHAT_ID:
+    token, chat_id = _creds()
+    if token and chat_id:
         try:
             _session.post(
-                f"https://api.telegram.org/bot{Config.TG_TOKEN}/sendMessage",
+                f"https://api.telegram.org/bot{token}/sendMessage",
                 json={
-                    "chat_id": Config.TG_CHAT_ID,
+                    "chat_id": chat_id,
                     "text": msg,
                     "parse_mode": "HTML",
                     "disable_web_page_preview": True,
