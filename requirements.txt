@@ -1,0 +1,1 @@
+requests>=2.31.0\nedge-tts>=6.1.10\nmutagen>=1.47.0\nPillow>=10.3.0\ngoogle-api-python-client>=2.120.0
