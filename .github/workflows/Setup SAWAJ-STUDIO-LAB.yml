@@ -1,18 +1,9 @@
-name: 🏗️ Setup SAWAJ-STUDIO-LAB Architecture
+name: 🏗️ Auto Setup SAWAJ-STUDIO-LAB Architecture
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      overwrite:
-        description: 'Overwrite existing files with starter content?'
-        required: true
-        type: boolean
-        default: false
-      dry_run:
-        description: 'Dry run (only show what will be created)?'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -25,72 +16,45 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🏗️ Build Complete Architecture
-        env:
-          OVERWRITE: ${{ inputs.overwrite }}
-          DRY_RUN: ${{ inputs.dry_run }}
+      - name: 🏗️ Build Complete Architecture Automatically
         run: |
           set -e
 
-          CREATED_FILES=0
-          CREATED_DIRS=0
-          SKIPPED=0
-
-          mkdir_safe() {
-            local dir="$1"
-            if [ ! -d "$dir" ]; then
-              if [ "$DRY_RUN" = "true" ]; then
-                echo "  [DRY] mkdir $dir"
-              else
-                mkdir -p "$dir"
-                echo "  ✅ mkdir $dir"
-              fi
-              CREATED_DIRS=$((CREATED_DIRS + 1))
-            fi
-          }
+          echo "=========================================="
+          echo "  CREATING DIRECTORIES AUTOMATICALLY"
+          echo "=========================================="
+          mkdir -p .github/workflows
+          mkdir -p src/sawaj_studio/core
+          mkdir -p src/sawaj_studio/fetchers
+          mkdir -p src/sawaj_studio/media
+          mkdir -p src/sawaj_studio/render
+          mkdir -p src/sawaj_studio/upload
+          mkdir -p src/sawaj_studio/pipelines
+          mkdir -p platforms/facebook
+          mkdir -p platforms/instagram
+          mkdir -p platforms/youtube
+          mkdir -p assets/logos
+          mkdir -p assets/fonts
+          mkdir -p assets/music
+          mkdir -p scripts
+          mkdir -p tests
+          mkdir -p output
+          mkdir -p temp
+          mkdir -p docs
 
           write_file() {
             local file="$1"
             local content="$2"
-            if [ ! -f "$file" ] || [ "$OVERWRITE" = "true" ]; then
-              if [ "$DRY_RUN" = "true" ]; then
-                echo "  [DRY] write $file"
-              else
-                mkdir -p "$(dirname "$file")"
-                printf '%s\n' "$content" > "$file"
-                echo "  ✅ write $file"
-              fi
-              CREATED_FILES=$((CREATED_FILES + 1))
-            else
-              SKIPPED=$((SKIPPED + 1))
-            fi
+            mkdir -p "$(dirname "$file")"
+            printf '%s\n' "$content" > "$file"
+            echo "  ✅ Synced: $file"
           }
 
           echo "=========================================="
-          echo "  STEP 1: CREATING DIRECTORIES"
+          echo "  CREATING & SYNCING FILES AUTOMATICALLY"
           echo "=========================================="
-          mkdir_safe ".github/workflows"
-          mkdir_safe "src/sawaj_studio/core"
-          mkdir_safe "src/sawaj_studio/fetchers"
-          mkdir_safe "src/sawaj_studio/media"
-          mkdir_safe "src/sawaj_studio/render"
-          mkdir_safe "src/sawaj_studio/upload"
-          mkdir_safe "src/sawaj_studio/pipelines"
-          mkdir_safe "platforms/facebook"
-          mkdir_safe "platforms/instagram"
-          mkdir_safe "platforms/youtube"
-          mkdir_safe "assets/logos"
-          mkdir_safe "assets/fonts"
-          mkdir_safe "assets/music"
-          mkdir_safe "scripts"
-          mkdir_safe "tests"
-          mkdir_safe "output"
-          mkdir_safe "temp"
-          mkdir_safe "docs"
-
-          echo "=========================================="
-          echo "  STEP 2: CREATING WORKFLOW FILES"
-          echo "=========================================="
+          
+          # Workflows
           write_file ".github/workflows/facebook_story.yml" 'name: Facebook Story Pipeline\non:\n  schedule:\n    - cron: "0 6 * * *"\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
           write_file ".github/workflows/facebook_short.yml" 'name: Facebook Short Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
           write_file ".github/workflows/facebook_long.yml" 'name: Facebook Long Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
@@ -99,9 +63,7 @@ jobs:
           write_file ".github/workflows/youtube_short.yml" 'name: YouTube Short Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
           write_file ".github/workflows/youtube_long.yml" 'name: YouTube Long Pipeline\non:\n  workflow_dispatch:\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4'
 
-          echo "=========================================="
-          echo "  STEP 3: CREATING SOURCE & CONFIG FILES"
-          echo "=========================================="
+          # Source & Modules
           write_file "src/sawaj_studio/__init__.py" '"""SAWAJ Studio — Automated Islamic content pipeline."""\n__version__ = "1.0.0"'
           write_file "src/sawaj_studio/core/__init__.py" '"""Core utilities."""'
           write_file "src/sawaj_studio/core/config.py" '# Config module'
@@ -139,6 +101,7 @@ jobs:
           write_file "src/sawaj_studio/pipelines/short_pipeline.py" '# Short pipeline'
           write_file "src/sawaj_studio/pipelines/long_pipeline.py" '# Long pipeline'
 
+          # Tests
           write_file "tests/__init__.py" '"""Tests suite."""'
           write_file "tests/conftest.py" '# Pytest config'
           write_file "tests/test_fetchers.py" '# Test fetchers'
@@ -147,6 +110,7 @@ jobs:
           write_file "tests/test_upload.py" '# Test upload'
           write_file "tests/test_pipelines.py" '# Test pipelines'
 
+          # Platform Configs
           write_file "platforms/facebook/story.yaml" 'platform: facebook\ntype: story'
           write_file "platforms/facebook/short.yaml" 'platform: facebook\ntype: short'
           write_file "platforms/facebook/long.yaml" 'platform: facebook\ntype: long'
@@ -155,6 +119,7 @@ jobs:
           write_file "platforms/youtube/short.yaml" 'platform: youtube\ntype: short'
           write_file "platforms/youtube/long.yaml" 'platform: youtube\ntype: long'
 
+          # Keepfiles & Docs
           write_file "assets/fonts/.gitkeep" ''
           write_file "assets/music/.gitkeep" ''
           write_file "output/.gitkeep" ''
@@ -166,6 +131,7 @@ jobs:
           write_file "docs/API_KEYS.md" '# API Keys'
           write_file "docs/TROUBLESHOOTING.md" '# Troubleshooting'
 
+          # Scripts
           write_file "scripts/run_facebook_story.py" '# Run Facebook Story script'
           write_file "scripts/run_facebook_short.py" '# Run Facebook Short script'
           write_file "scripts/run_facebook_long.py" '# Run Facebook Long script'
@@ -174,6 +140,7 @@ jobs:
           write_file "scripts/run_youtube_short.py" '# Run YouTube Short script'
           write_file "scripts/run_youtube_long.py" '# Run YouTube Long script'
 
+          # Root configs
           write_file "requirements.txt" 'requests>=2.31.0\nedge-tts>=6.1.10\nmutagen>=1.47.0\nPillow>=10.3.0\ngoogle-api-python-client>=2.120.0'
           write_file "pyproject.toml" '[project]\nname = "sawaj-studio"\nversion = "1.0.0"'
           write_file "Makefile" 'install:\n\tpip install -r requirements.txt'
@@ -181,19 +148,18 @@ jobs:
           write_file ".gitignore" '__pycache__/\noutput/*\ntemp/*\n.env'
           write_file ".dockerignore" '.git\n.env'
 
-          echo "  Summary: Created $CREATED_FILES files, $CREATED_DIRS directories."
+          echo "  Architecture successfully built and synced automatically!"
 
-      - name: 🚀 Commit and Push Changes
+      - name: 🚀 Commit and Push Changes Automatically
         env:
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.io"
           
-          # Use PAT to bypass workflow push restriction
           git remote set-url origin https://x-access-token:${TOKEN_GITHUB}@github.com/${{ github.repository }}.git
           
           git add .
           git status
-          git diff --staged --quiet || git commit -m "🏗️️ Auto-setup complete SAWAJ-STUDIO-LAB architecture"
+          git diff --staged --quiet || git commit -m "🤖 Fully automated SAWAJ-STUDIO-LAB architecture sync"
           git push origin main
