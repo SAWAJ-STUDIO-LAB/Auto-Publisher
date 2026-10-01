@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      A3_telegram.py
-# PATH:      social_media/facebook/story_video/A_core/A3_telegram.py
-# PURPOSE:   Combined Telegram report — buffer + send
+# 📄 FILE:      A3_telegram.py
+# 📁 PATH:      social_media/facebook/short_video/A_core/A3_telegram.py
+# 🎯 PURPOSE:   Combined Telegram report — buffer + send
 # ============================================================
 
 import os
@@ -16,7 +16,7 @@ FILE_TIMERS = {}
 FILE_RESULTS = []
 STEP_COUNTER = {"total": 0, "success": 0, "failed": 0}
 START_TIME = None
-RUN_HEADER = "📘 FACEBOOK STORY RUN"
+RUN_HEADER = "📘 FACEBOOK SHORT RUN"
 
 
 def _now():
@@ -47,7 +47,7 @@ def _send_raw(msg, silent=False):
     print(msg, flush=True)
 
 
-def run_start(title="📘 FACEBOOK STORY RUN"):
+def run_start(title="📘 FACEBOOK SHORT RUN"):
     global START_TIME, RUN_HEADER, LOG_BUFFER
     START_TIME = time.time()
     RUN_HEADER = title
