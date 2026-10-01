@@ -1,8 +1,8 @@
 # ============================================================
 # 📄 FILE:      D4_frames.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D4_frames.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D4_frames.py
 # 🎯 PURPOSE:   Combine intro + main + outro into frames
-# ⏱️  TIMING:   Intro 2s + Main 50-55s + Outro 2s = 54-59s total
+# ⏱️  TIMING:   Intro 2s + Main 55-170s + Outro 2s = 1-3 min total
 # ============================================================
 
 import os
@@ -25,7 +25,7 @@ class Frames:
     def __init__(self):
         log_file_start("D4_frames.py", "Frame generation")
         self.fps = 25
-        # TIMING: Intro 2s + Outro 2s = 4s total overlay
+        # TIMING: Intro 2s + Outro 2s
         self.intro_dur = 2.0
         self.outro_dur = 2.0
         log_file_end("D4_frames.py", "success",
@@ -35,7 +35,7 @@ class Frames:
     # ③ GENERATE — generate all frames
     # ─────────────────────────────────────────────────────────
     def generate(self, voice_dur, has_logo, hindi, urdu, english,
-                 hadith_label="", out_dir="s_frames"):
+                 hadith_label="", out_dir="p_frames"):
         os.makedirs(out_dir, exist_ok=True)
 
         # Total = intro + voice + outro
