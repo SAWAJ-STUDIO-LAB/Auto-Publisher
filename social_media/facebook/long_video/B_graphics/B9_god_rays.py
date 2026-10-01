@@ -1,13 +1,14 @@
 # ============================================================
-# FILE:      B9_god_rays.py
-# PATH:      social_media/facebook/story_video/B_graphics/B9_god_rays.py
-# PURPOSE:   Light rays from top
+# 📄 FILE:      B9_god_rays.py
+# 📁 PATH:      social_media/facebook/long_video/B_graphics/B9_god_rays.py
+# 🎯 PURPOSE:   Light rays from top
 # ============================================================
 
 import math
 
 
 def draw_god_rays(draw, t, opacity=25):
+    """Draw soft light beams from top center."""
     cx = 540
     for i in range(5):
         angle = -math.pi / 2 + (i - 2) * 0.15 + 0.02 * math.sin(t)
