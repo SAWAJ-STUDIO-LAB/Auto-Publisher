@@ -1,5 +1,5 @@
 # ============================================================
-# FILE:      __init__.py
-# PATH:      social_media/facebook/story_video/F_upload/__init__.py
-# PURPOSE:   Package marker
+# 📄 FILE:      __init__.py
+# 📁 PATH:      social_media/facebook/short_video/F_upload/__init__.py
+# 🎯 PURPOSE:   Package marker
 # ============================================================
