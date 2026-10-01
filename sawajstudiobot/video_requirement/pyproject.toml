@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sawajstudiobot"
+version = "1.0.0"
+description = "Automated Islamic Video Generator Bot for FB, IG, and YouTube"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Pillow>=10.2.0",
+    "gTTS>=2.5.1",
+    "edge-tts>=6.1.9",
+    "requests>=2.31.0",
+    "google-generativeai>=0.4.0",
+    "groq>=0.4.2",
+    "python-dotenv>=1.0.1"
+]
