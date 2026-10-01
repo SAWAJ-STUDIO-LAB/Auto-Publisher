@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      .gitignore
-# PATH:      social_media/facebook/story_video/.gitignore
-# PURPOSE:   Git ignore rules
+# 📄 FILE:      .gitignore
+# 📁 PATH:      social_media/facebook/short_video/.gitignore
+# 🎯 PURPOSE:   Git ignore rules
 # ============================================================
 
 output/temp/*
@@ -19,8 +19,8 @@ __pycache__/
 *.mp3
 *.mp4
 avatar.png
-s_frames/
-Final_Story.mp4
+p_frames/
+Final_Short_Video.mp4
 thumbnail.jpg
 music_raw.mp3
 
