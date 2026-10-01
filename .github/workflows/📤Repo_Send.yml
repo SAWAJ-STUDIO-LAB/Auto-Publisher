@@ -1,8 +1,6 @@
-name: Combine all-in-one Send
+name: 📤Combine all-in-one Send
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -17,30 +15,33 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Combine All .py Files into Single File
+      - name: Combine All Files into Single File
         run: |
           python -c '
           import os
 
-          output_file = "all_code_combined.py"
+          output_file = "all_code_combined.txt"
+
+          IGNORE_DIRS = {".git", ".github", "__pycache__", "node_modules", "venv", "env"}
+          IGNORE_FILES = {output_file, "package-lock.json", "yarn.lock"}
 
           with open(output_file, "w", encoding="utf-8") as outfile:
               outfile.write("# ==============================================\n")
-              outfile.write("# CONSOLIDATED SINGLE PYTHON FILE\n")
-              outfile.write("# ALL REPOSITORY .PY FILES COMBINED TOGETHER\n")
+              outfile.write("# CONSOLIDATED SINGLE CODEBASE FILE\n")
+              outfile.write("# ALL REPOSITORY FILES COMBINED TOGETHER\n")
               outfile.write("# ==============================================\n\n")
 
-              py_files = []
+              all_files = []
               for root, dirs, files in os.walk("."):
-                  # Ignore hidden folders like .git, .github, __pycache__, etc.
-                  dirs[:] = [d for d in dirs if not d.startswith(".")]
+                  dirs[:] = [d for d in dirs if d not in IGNORE_DIRS and not d.startswith(".")]
                   for file in sorted(files):
-                      if file.endswith(".py") and file != output_file:
-                          py_files.append(os.path.join(root, file))
+                      if file not in IGNORE_FILES and not file.startswith("."):
+                          all_files.append(os.path.join(root, file))
 
-              py_files.sort()
+              all_files.sort()
 
-              for filepath in py_files:
+              success_count = 0
+              for filepath in all_files:
                   relative_path = os.path.relpath(filepath, ".")
                   outfile.write(f"\n# " + "="*70 + "\n")
                   outfile.write(f"# ORIGINAL FILE: {relative_path}\n")
@@ -49,10 +50,11 @@ jobs:
                       with open(filepath, "r", encoding="utf-8", errors="ignore") as infile:
                           outfile.write(infile.read())
                           outfile.write("\n\n")
+                      success_count += 1
                   except Exception as e:
-                      outfile.write(f"# Error reading file {relative_path}: {e}\n\n")
+                      outfile.write(f"# [Skipped/Binary or Unreadable file]: {e}\n\n")
 
-          print(f"Successfully combined {len(py_files)} Python files into {output_file}")
+          print(f"Successfully combined {success_count} files into {output_file}")
           '
 
       - name: Send Combined File to Telegram
@@ -66,6 +68,6 @@ jobs:
           fi
 
           curl -s -F chat_id="$TELEGRAM_CHAT_ID" \
-               -F document=@all_code_combined.py \
-               -F caption="📦 All Python files combined into a single file" \
+               -F document=@all_code_combined.txt \
+               -F caption="📦 All project files combined into a single file" \
                https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument
