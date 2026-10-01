@@ -1,4 +1,4 @@
-name: "🏗️ MASTER Build "
+name: "🏗️ MASTER Build"
 
 on:
   workflow_dispatch:
@@ -81,10 +81,10 @@ jobs:
           build_folder "social_media/youtube/short_video" "short" "C9_hashtags"
           build_folder "social_media/youtube/long_video" "long" "C9_thumbnail_yt C10_seo C11_playlist C12_chapters"
 
-          echo "Structure built"
+          echo "Structure built successfully."
 
       # ====================================================
-      # STEP 2: COPY COMPLETE SOURCE CODE & LOGO PHOTO
+      # STEP 2: COPY COMPLETE SOURCE CODE & IMAGE/LOGO
       # ====================================================
       - name: Copy All Source Files and Logo
         run: |
@@ -96,25 +96,27 @@ jobs:
           for DST in $DESTS; do
             echo "Copying source code to $DST"
 
-            # Copy all subdirectories and contents
-            cp -r "$SRC/A_core/." "$DST/A_core/" 2>/dev/null || true
-            cp -r "$SRC/B_graphics/." "$DST/B_graphics/" 2>/dev/null || true
-            cp -r "$SRC/C_content/." "$DST/C_content/" 2>/dev/null || true
-            cp -r "$SRC/D_video/." "$DST/D_video/" 2>/dev/null || true
-            cp -r "$SRC/E_audio/." "$DST/E_audio/" 2>/dev/null || true
-            cp -r "$SRC/F_upload/." "$DST/F_upload/" 2>/dev/null || true
-            cp -r "$SRC/H_tests/." "$DST/H_tests/" 2>/dev/null || true
+            if [ -d "$SRC" ]; then
+              cp -r "$SRC/A_core/." "$DST/A_core/" 2>/dev/null || true
+              cp -r "$SRC/B_graphics/." "$DST/B_graphics/" 2>/dev/null || true
+              cp -r "$SRC/C_content/." "$DST/C_content/" 2>/dev/null || true
+              cp -r "$SRC/D_video/." "$DST/D_video/" 2>/dev/null || true
+              cp -r "$SRC/E_audio/." "$DST/E_audio/" 2>/dev/null || true
+              cp -r "$SRC/F_upload/." "$DST/F_upload/" 2>/dev/null || true
+              cp -r "$SRC/H_tests/." "$DST/H_tests/" 2>/dev/null || true
 
-            # Copy Root config files if present in source
-            for f in requirements.txt .gitignore Makefile env.example README.md pyproject.toml; do
-              [ -f "$SRC/$f" ] && cp "$SRC/$f" "$DST/$f" || true
-            done
-
-            # Copy logo.png to each main folder and C_content subfolder
-            if [ -f "logo.png" ]; then
-              cp logo.png "$DST/logo.png"
-              cp logo.png "$DST/C_content/logo.png"
+              for f in requirements.txt .gitignore Makefile env.example README.md pyproject.toml; do
+                [ -f "$SRC/$f" ] && cp "$SRC/$f" "$DST/$f" || true
+              done
             fi
+
+            # Root directory se koi bhi image (logo.png, .jpg, .jpeg) copy karein
+            for img in logo.png *.png *.jpg *.jpeg; do
+              if [ -f "$img" ]; then
+                cp "$img" "$DST/" 2>/dev/null || true
+                cp "$img" "$DST/C_content/" 2>/dev/null || true
+              fi
+            done
           done
 
           # Map G_entry scripts
@@ -130,14 +132,14 @@ jobs:
             [ -f "$SRC/H_tests/H2_test_story.py" ] && cp "$SRC/H_tests/H2_test_story.py" "social_media/$DIR/H_tests/H2_test_${TYPE}.py" || true
           done
 
-          echo "Source files and logo copied"
+          echo "Source files and photos copied successfully."
 
       # ====================================================
       # STEP 3: FILL A1_config.py (FB)
       # ====================================================
       - name: Fill FB A1_config
         run: |
-          cat > /tmp/a1_fb.txt << 'XEOF'
+          cat << 'EOF' > social_media/facebook/short_video/A_core/A1_config.py
           import os
 
           class Config:
@@ -168,17 +170,15 @@ jobs:
               @property
               def should_post_social(self):
                   return (self.EVENT_NAME == "schedule") or self.UPLOAD_TO_SOCIAL
-          XEOF
-          sed 's/^          //' /tmp/a1_fb.txt > social_media/facebook/short_video/A_core/A1_config.py
+          EOF
           cp social_media/facebook/short_video/A_core/A1_config.py social_media/facebook/long_video/A_core/A1_config.py
-          echo "FB A1 done"
 
       # ====================================================
       # STEP 4: FILL A1_config.py (IG)
       # ====================================================
       - name: Fill IG A1_config
         run: |
-          cat > /tmp/a1_ig.txt << 'XEOF'
+          cat << 'EOF' > social_media/instagram/story_video/A_core/A1_config.py
           import os
 
           class Config:
@@ -210,17 +210,15 @@ jobs:
               @property
               def should_post_social(self):
                   return (self.EVENT_NAME == "schedule") or self.UPLOAD_TO_SOCIAL
-          XEOF
-          sed 's/^          //' /tmp/a1_ig.txt > social_media/instagram/story_video/A_core/A1_config.py
+          EOF
           cp social_media/instagram/story_video/A_core/A1_config.py social_media/instagram/short_video/A_core/A1_config.py
-          echo "IG A1 done"
 
       # ====================================================
       # STEP 5: FILL A1_config.py (YT)
       # ====================================================
       - name: Fill YT A1_config
         run: |
-          cat > /tmp/a1_yt.txt << 'XEOF'
+          cat << 'EOF' > social_media/youtube/short_video/A_core/A1_config.py
           import os
 
           class Config:
@@ -253,17 +251,15 @@ jobs:
               @property
               def should_post_social(self):
                   return (self.EVENT_NAME == "schedule") or self.UPLOAD_TO_SOCIAL
-          XEOF
-          sed 's/^          //' /tmp/a1_yt.txt > social_media/youtube/short_video/A_core/A1_config.py
+          EOF
           cp social_media/youtube/short_video/A_core/A1_config.py social_media/youtube/long_video/A_core/A1_config.py
-          echo "YT A1 done"
 
       # ====================================================
       # STEP 6: FILL FB UPLOAD
       # ====================================================
       - name: Fill FB Upload
         run: |
-          cat > /tmp/fb_up.txt << 'XEOF'
+          cat << 'EOF' > social_media/facebook/short_video/F_upload/F2_upload_short.py
           import os
           from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
@@ -296,17 +292,15 @@ jobs:
                   except Exception as e:
                       log_api("F2_upload_short.py", "FB", "failed", str(e)[:100])
                       return False
-          XEOF
-          sed 's/^          //' /tmp/fb_up.txt > social_media/facebook/short_video/F_upload/F2_upload_short.py
+          EOF
           cp social_media/facebook/short_video/F_upload/F2_upload_short.py social_media/facebook/long_video/F_upload/F2_upload_long.py
-          echo "FB Upload done"
 
       # ====================================================
       # STEP 7: FILL IG STORY UPLOAD
       # ====================================================
       - name: Fill IG Story Upload
         run: |
-          cat > /tmp/ig_story.txt << 'XEOF'
+          cat << 'EOF' > social_media/instagram/story_video/F_upload/F2_upload_story.py
           import os
           import time
           from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
@@ -361,6 +355,16 @@ jobs:
                   except Exception as e:
                       log_api("F2_upload_story.py", "IG-Story", "failed", str(e)[:100])
                       return False
-          XEOF
-          sed 's/^          //' /tmp/ig_story.txt > social_media/instagram/story_video/F_upload/F2_upload_story.py
-          echo "IG Story Upload done"
+          EOF
+
+      # ====================================================
+      # STEP 8: COMMIT AND PUSH TO REPOSITORY (CRITICAL FIX)
+      # ====================================================
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add social_media/
+          git status
+          git commit -m "Auto-build complete social_media structure, scripts and logos" || echo "No changes to commit"
+          git push origin main || git push
