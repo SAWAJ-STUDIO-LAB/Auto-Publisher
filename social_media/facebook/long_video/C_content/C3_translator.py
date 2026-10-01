@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C3_translator.py
-# PATH:      social_media/facebook/story_video/C_content/C3_translator.py
-# PURPOSE:   English → Hindi translation
+# 📄 FILE:      C3_translator.py
+# 📁 PATH:      social_media/facebook/long_video/C_content/C3_translator.py
+# 🎯 PURPOSE:   English → Hindi translation (DeepL + AI fallback)
 # ============================================================
 
 import os
@@ -9,6 +9,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
 class Translator:
+    """Translate English hadith to Hindi."""
 
     def __init__(self, base, ai):
         log_file_start("C3_translator.py", "English → Hindi translation")
@@ -17,6 +18,7 @@ class Translator:
         log_file_end("C3_translator.py", "success", "Ready")
 
     def deepl(self, text):
+        """Try DeepL API first."""
         key = os.environ.get("DEEPL_API_KEY")
         if not key:
             self.base.api_status["Translation"]["DeepL"] = "hold (no key)"
@@ -27,7 +29,7 @@ class Translator:
                 "https://api-free.deepl.com/v2/translate",
                 headers={"Authorization": f"DeepL-Auth-Key {key}"},
                 data={"text": text, "target_lang": "HI"},
-                timeout=25)
+                timeout=60)
             if r.status_code == 200:
                 out = r.json()["translations"][0]["text"]
                 self.base.api_status["Translation"]["DeepL"] = "success"
@@ -41,6 +43,7 @@ class Translator:
         return None
 
     def to_hindi(self, english):
+        """Get Hindi translation with fallback."""
         log_step("C3_translator.py", "to_hindi()", "ok")
         hindi = self.deepl(english)
         if hindi:
@@ -48,8 +51,10 @@ class Translator:
 
         log_step("C3_translator.py", "DeepL failed → AI fallback", "warn")
         result = self.ai.call(
-            f"Is English Hadith ka soft accurate Hindi tarjuma likho. "
-            f"Sirf tarjuma. Koi extra baat mat likho.\n\n{english}",
+            f"Is English Hadith ka soft accurate COMPLETE Hindi tarjuma likho. "
+            f"Sirf tarjuma. Koi extra baat mat likho. "
+            f"Hadith ki har line ka tarjuma karo, kuch mat chhodo.\n\n{english}",
+            max_tokens=2000,
             task="hindi")
         if result:
             log_step("C3_translator.py", "AI translation done", "ok")
