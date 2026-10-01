@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      requirements.txt
-# PATH:      social_media/facebook/story_video/requirements.txt
-# PURPOSE:   Python dependencies
+# 📄 FILE:      requirements.txt
+# 📁 PATH:      social_media/facebook/long_video/requirements.txt
+# 🎯 PURPOSE:   Python dependencies for Facebook Long pipeline
 # ============================================================
 
 requests>=2.31.0
