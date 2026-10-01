@@ -1,0 +1,100 @@
+# ============================================================
+# FILE:      copy_to_instagram.yml
+# PATH:      .github/workflows/copy_to_instagram.yml
+# PURPOSE:   Copy common files from facebook/story_video → instagram/story_video
+# NOTE:      Temporary workflow — delete after use
+# ============================================================
+
+name: "📋 Copy FB Story → IG Story"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+
+      - name: 📋 Copy Common Files
+        run: |
+          set -e
+
+          SRC="social_media/facebook/story_video"
+          DST="social_media/instagram/story_video"
+
+          # Make sure destination folders exist
+          mkdir -p "$DST"
+          mkdir -p "$DST/A_core"
+          mkdir -p "$DST/B_graphics"
+          mkdir -p "$DST/C_content"
+          mkdir -p "$DST/D_video"
+          mkdir -p "$DST/E_audio"
+          mkdir -p "$DST/F_upload"
+          mkdir -p "$DST/G_entry"
+          mkdir -p "$DST/H_tests"
+          mkdir -p "$DST/output/temp"
+          mkdir -p "$DST/output/final"
+
+          # ========== A_core ==========
+          cp "$SRC/A_core/__init__.py"         "$DST/A_core/" 2>/dev/null || true
+          cp "$SRC/A_core/A2_logger.py"        "$DST/A_core/" 2>/dev/null || true
+          cp "$SRC/A_core/A3_telegram.py"      "$DST/A_core/" 2>/dev/null || true
+          cp "$SRC/A_core/A4_utils.py"         "$DST/A_core/" 2>/dev/null || true
+          cp "$SRC/A_core/A5_base_pipeline.py" "$DST/A_core/" 2>/dev/null || true
+          # NOTE: A1_config.py NOT copied — IG has its own version
+
+          # ========== B_graphics ==========
+          cp -r "$SRC/B_graphics/." "$DST/B_graphics/" 2>/dev/null || true
+
+          # ========== C_content ==========
+          cp -r "$SRC/C_content/." "$DST/C_content/" 2>/dev/null || true
+
+          # ========== D_video ==========
+          cp -r "$SRC/D_video/." "$DST/D_video/" 2>/dev/null || true
+
+          # ========== E_audio ==========
+          cp -r "$SRC/E_audio/." "$DST/E_audio/" 2>/dev/null || true
+
+          # ========== F_upload ==========
+          cp "$SRC/F_upload/__init__.py"  "$DST/F_upload/" 2>/dev/null || true
+          cp "$SRC/F_upload/F1_drive.py"  "$DST/F_upload/" 2>/dev/null || true
+          # NOTE: F2_upload_story.py NOT copied — IG has its own version
+
+          # ========== G_entry ==========
+          cp -r "$SRC/G_entry/." "$DST/G_entry/" 2>/dev/null || true
+
+          # ========== H_tests ==========
+          cp -r "$SRC/H_tests/." "$DST/H_tests/" 2>/dev/null || true
+
+          # ========== Root files ==========
+          cp "$SRC/requirements.txt"  "$DST/" 2>/dev/null || true
+          cp "$SRC/.gitignore"        "$DST/" 2>/dev/null || true
+          cp "$SRC/Makefile"          "$DST/" 2>/dev/null || true
+
+          # ========== Output .gitkeep ==========
+          touch "$DST/output/temp/.gitkeep"
+          touch "$DST/output/final/.gitkeep"
+
+          echo "============================================"
+          echo "✅ Files copied successfully!"
+          echo "============================================"
+          echo "Copied to: $DST"
+          echo ""
+          echo "Files now in IG story_video:"
+          find "$DST" -type f | sort
+
+      - name: 🚀 Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: copy common files from FB story → IG story" || exit 0
+          git push
