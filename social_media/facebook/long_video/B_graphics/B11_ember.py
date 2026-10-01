@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      B11_ember.py
-# PATH:      social_media/facebook/story_video/B_graphics/B11_ember.py
-# PURPOSE:   Rising embers
+# 📄 FILE:      B11_ember.py
+# 📁 PATH:      social_media/facebook/long_video/B_graphics/B11_ember.py
+# 🎯 PURPOSE:   Rising ember particles (warm fire effect)
 # ============================================================
 
 import math
@@ -9,6 +9,7 @@ import random
 
 
 def draw_embers(draw, t, count=15):
+    """Draw rising orange ember particles."""
     rng = random.Random(int(t * 5))
     for _ in range(count):
         x = rng.randint(50, 1030)
