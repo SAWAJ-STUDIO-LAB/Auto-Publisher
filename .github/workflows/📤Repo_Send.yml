@@ -1,4 +1,4 @@
-name: 📤Combine all-in-one Send
+name: Combine all-in-one Send repo
 
 on:
   workflow_dispatch:
@@ -22,20 +22,22 @@ jobs:
 
           output_file = "all_code_combined.txt"
 
-          IGNORE_DIRS = {".git", ".github", "__pycache__", "node_modules", "venv", "env"}
+          # Sirf zaroori cheezein ignore hongi, .github/ aur .yml files ab include ho jayengi
+          IGNORE_DIRS = {".git", "__pycache__", "node_modules", "venv", "env"}
           IGNORE_FILES = {output_file, "package-lock.json", "yarn.lock"}
 
           with open(output_file, "w", encoding="utf-8") as outfile:
               outfile.write("# ==============================================\n")
               outfile.write("# CONSOLIDATED SINGLE CODEBASE FILE\n")
-              outfile.write("# ALL REPOSITORY FILES COMBINED TOGETHER\n")
+              outfile.write("# ALL REPOSITORY FILES (INCLUDING YML) COMBINED\n")
               outfile.write("# ==============================================\n\n")
 
               all_files = []
               for root, dirs, files in os.walk("."):
-                  dirs[:] = [d for d in dirs if d not in IGNORE_DIRS and not d.startswith(".")]
+                  # .github ab ignore nahi hoga
+                  dirs[:] = [d for d in dirs if d not in IGNORE_DIRS and not (d.startswith(".") and d != ".github")]
                   for file in sorted(files):
-                      if file not in IGNORE_FILES and not file.startswith("."):
+                      if file not in IGNORE_FILES:
                           all_files.append(os.path.join(root, file))
 
               all_files.sort()
@@ -69,5 +71,5 @@ jobs:
 
           curl -s -F chat_id="$TELEGRAM_CHAT_ID" \
                -F document=@all_code_combined.txt \
-               -F caption="📦 All project files combined into a single file" \
+               -F caption="📦 All project files (including YML) combined!" \
                https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument
