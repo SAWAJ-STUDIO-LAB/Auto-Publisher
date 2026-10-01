@@ -2,22 +2,18 @@
 # ║  📄 FILE:      A1_config.py                              ║
 # ║  📁 PATH:      .../fb_ig_yt_short_video_generator/       ║
 # ║                A_core/A1_config.py                       ║
-# ║  🎯 PURPOSE:   Load all environment variables            ║
+# ║  🎯 PURPOSE:   Config — offline/online mode (SHORT)      ║
 # ║  📖 FOLDER:    A_core                                    ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   ⚙️  CONFIG MODULE                                       ║
-║   ═══════════════════                                    ║
+║   ⚙️  CONFIG MODULE (SHORT)                              ║
+║   ═══════════════════════                                ║
 ║                                                          ║
-║   🎯 Purpose:                                            ║
-║      Saare environment variables ek jagah load karna    ║
-║                                                          ║
-║   📖 Usage:                                              ║
-║      from A_core.A1_config import Config                 ║
-║      cfg = Config()                                      ║
-║      print(cfg.PAGE_ID)                                  ║
+║   🎯 Upload Modes:                                       ║
+║      • offline → Sirf Google Drive                       ║
+║      • online  → Google Drive + Social (FB + IG + YT)    ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
@@ -25,50 +21,34 @@
 import os
 
 
-# ═══════════════════════════════════════════════════════════
-# 🎯 CONFIG CLASS
-# ═══════════════════════════════════════════════════════════
-
 class Config:
-    """Central Config — reads all env variables once."""
+    """Config — offline/online upload system (Short)."""
 
-    # ─────────────────────────────────────────────────────
-    # ① TELEGRAM
-    # ─────────────────────────────────────────────────────
+    # ─── TELEGRAM ───
     TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-    # ─────────────────────────────────────────────────────
-    # ② FACEBOOK / META
-    # ─────────────────────────────────────────────────────
+    # ─── FACEBOOK ───
     META_TOKEN = os.environ.get("FACEBOOK_META_TOKEN", "").strip()
     PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
 
-    # ─────────────────────────────────────────────────────
-    # ③ INSTAGRAM
-    # ─────────────────────────────────────────────────────
+    # ─── INSTAGRAM ───
     IG_TOKEN = os.environ.get("FACEBOOK_INSTAGRAM_META_TOKEN", "").strip()
     IG_BUSINESS_ID = os.environ.get("INSTAGRAM_BUSINESS_ACCOUNT_ID", "").strip()
 
-    # ─────────────────────────────────────────────────────
-    # ④ YOUTUBE
-    # ─────────────────────────────────────────────────────
+    # ─── YOUTUBE ───
     YT_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
     YT_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
     YT_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
     YT_PLAYLIST_ID = os.environ.get("DAILY_HADEES_YT_PLAYLIST_ID")
 
-    # ─────────────────────────────────────────────────────
-    # ⑤ GOOGLE DRIVE
-    # ─────────────────────────────────────────────────────
+    # ─── DRIVE ───
     DRIVE_CLIENT_ID = os.environ.get("GOOGLE_DRIVE_CLIENT_ID")
     DRIVE_CLIENT_SECRET = os.environ.get("GOOGLE_DRIVE_CLIENT_SECRET")
     DRIVE_REFRESH_TOKEN = os.environ.get("GOOGLE_DRIVE_REFRESH_TOKEN")
     DRIVE_SHORT_FOLDER_ID = os.environ.get("GDRIVE_SHORT_VIDEO_FOLDER_ID")
 
-    # ─────────────────────────────────────────────────────
-    # ⑥ AI PROVIDERS
-    # ─────────────────────────────────────────────────────
+    # ─── AI PROVIDERS ───
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -77,35 +57,52 @@ class Config:
     COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
     HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACE_API_KEY")
 
-    # ─────────────────────────────────────────────────────
-    # ⑦ TTS / TRANSLATION
-    # ─────────────────────────────────────────────────────
+    # ─── TTS / TRANSLATION ───
     ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
     DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
 
-    # ─────────────────────────────────────────────────────
-    # ⑧ MEDIA APIS
-    # ─────────────────────────────────────────────────────
+    # ─── MEDIA APIS ───
     PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
     PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY")
     FREESOUND_API_KEY = os.environ.get("FREESOUND_API_KEY")
 
-    # ─────────────────────────────────────────────────────
-    # ⑨ HADITH API
-    # ─────────────────────────────────────────────────────
+    # ─── HADITH ───
     HADITH_API_URL = os.environ.get("HADITH_API_URL")
 
-    # ─────────────────────────────────────────────────────
-    # ⑩ RUNTIME
-    # ─────────────────────────────────────────────────────
+    # ─── RUNTIME ───
     EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
-    UPLOAD_TO_SOCIAL = str(os.environ.get("UPLOAD_TO_SOCIAL", "")).lower() == "true"
-    PLATFORM = os.environ.get("PLATFORM", "facebook")
+    UPLOAD_MODE = os.environ.get("UPLOAD_MODE", "offline").strip().lower()
+    UPLOAD_CONFIRMED = str(
+        os.environ.get("UPLOAD_CONFIRMED", "false")
+    ).lower() == "true"
 
-    # ─────────────────────────────────────────────────────
-    # ⑪ PROPERTY
-    # ─────────────────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════
+    # LOGIC
+    # ═══════════════════════════════════════════════════════
+
+    @property
+    def is_scheduled(self):
+        return self.EVENT_NAME == "schedule"
+
+    @property
+    def should_upload_drive(self):
+        return True
+
     @property
     def should_post_social(self):
-        """True if scheduled OR manual with upload flag."""
-        return (self.EVENT_NAME == "schedule") or self.UPLOAD_TO_SOCIAL
+        if self.is_scheduled:
+            return True
+        if self.UPLOAD_MODE == "online":
+            return self.UPLOAD_CONFIRMED
+        return False
+
+    def available_platforms(self):
+        """Which platforms have credentials? (Short: FB + IG + YT)"""
+        available = []
+        if self.META_TOKEN and self.PAGE_ID:
+            available.append("facebook")
+        if self.IG_TOKEN and self.IG_BUSINESS_ID:
+            available.append("instagram")
+        if self.YT_REFRESH_TOKEN and self.YT_CLIENT_ID:
+            available.append("youtube")
+        return available
