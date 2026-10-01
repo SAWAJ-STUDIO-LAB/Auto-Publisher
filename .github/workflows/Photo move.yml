@@ -1,4 +1,4 @@
-name: "🏗️ MASTER Build"
+name: "🏗️ MASTER Build "
 
 on:
   workflow_dispatch:
