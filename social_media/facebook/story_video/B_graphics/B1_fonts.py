@@ -1,17 +1,30 @@
 # ============================================================
-# FILE:      B1_fonts.py
-# PATH:      social_media/facebook/story_video/B_graphics/B1_fonts.py
-# PURPOSE:   Font loader
+# 📄 FILE:      B1_fonts.py
+# 📁 PATH:      social_media/facebook/story_video/B_graphics/B1_fonts.py
+# 🎯 PURPOSE:   Font loader (Devanagari / Arabic / Latin)
 # ============================================================
 
 import os
 from PIL import ImageFont
 
 
+# ─────────────────────────────────────────────────────────────
+# ① FONT LOADER CLASS
+# ─────────────────────────────────────────────────────────────
 class FontLoader:
+    """Load fonts from ~/.fonts/ with fallback."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② LOAD — load font by size + script
+    # ─────────────────────────────────────────────────────────
     @staticmethod
     def load(size, script="latin", bold=True):
+        """
+        Load font for given script:
+          - latin (default)
+          - devanagari (Hindi)
+          - arabic (Urdu/Arabic)
+        """
         if script == "devanagari":
             paths = [
                 "~/.fonts/NotoSansDevanagari-Bold.ttf" if bold
@@ -27,6 +40,7 @@ class FontLoader:
                 "~/.fonts/NotoSans-Bold.ttf" if bold
                 else "~/.fonts/NotoSans-Regular.ttf",
             ]
+
         for p in paths:
             try:
                 return ImageFont.truetype(os.path.expanduser(p), size)
