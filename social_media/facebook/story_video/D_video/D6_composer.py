@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      D6_composer.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D6_composer.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D6_composer.py
 # 🎯 PURPOSE:   Compose final video from frames + audio
 # ============================================================
 
@@ -26,7 +26,7 @@ class Composer:
     # ③ COMPOSE — compose final video
     # ─────────────────────────────────────────────────────────
     def compose(self, bg, frames_dir, voice, total,
-                outfile="output/final/Final_Story.mp4"):
+                outfile="output/final/Final_Short_Video.mp4"):
         log_step("D6_composer.py", "compose() starting", "ok",
                  f"total={total:.1f}s")
 
