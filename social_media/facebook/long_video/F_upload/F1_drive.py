@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      F1_drive.py
-# PATH:      social_media/facebook/story_video/F_upload/F1_drive.py
-# PURPOSE:   Google Drive upload
+# 📄 FILE:      F1_drive.py
+# 📁 PATH:      social_media/facebook/long_video/F_upload/F1_drive.py
+# 🎯 PURPOSE:   Google Drive upload (backup)
 # ============================================================
 
 import os
@@ -10,13 +10,14 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
 class Drive:
+    """Upload video to Google Drive."""
 
     def __init__(self, base):
         log_file_start("F1_drive.py", "Google Drive upload")
         self.base = base
         log_file_end("F1_drive.py", "success", "Ready")
 
-    def upload(self, path, prefix="Story"):
+    def upload(self, path, prefix="Long"):
         log_step("F1_drive.py", f"upload({path})", "ok")
         try:
             from google.oauth2.credentials import Credentials
@@ -32,7 +33,7 @@ class Drive:
             service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
             meta = {"name": f"{prefix}_{int(time.time())}.mp4"}
-            folder_id = os.environ.get("DRIVE_STORY_FOLDER_ID")
+            folder_id = os.environ.get("DRIVE_FOLDER_ID")
             if folder_id:
                 meta["parents"] = [folder_id]
 
