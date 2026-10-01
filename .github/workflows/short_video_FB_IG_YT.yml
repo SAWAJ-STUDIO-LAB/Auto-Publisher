@@ -85,7 +85,7 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────
-  # JOB 1: SETUP & VALIDATION
+  # JOB 1: VALIDATE SETUP
   # ─────────────────────────────────────────────────────────────────────
   validate:
     name: 🔍 Validate Setup
@@ -107,7 +107,6 @@ jobs:
           INPUT_PLATFORM="${{ github.event.inputs.platform }}"
           SKIP="${{ github.event.inputs.skip_upload }}"
 
-          # Default: scheduled = upload, manual = user's choice
           if [ "$EVENT" = "schedule" ]; then
             UPLOAD="true"
             PLATFORM="facebook"
@@ -116,7 +115,6 @@ jobs:
             PLATFORM="${INPUT_PLATFORM:-facebook}"
           fi
 
-          # Override: skip upload
           if [ "$SKIP" = "true" ]; then
             UPLOAD="false"
           fi
@@ -133,6 +131,7 @@ jobs:
 
           for f in \
             "$GEN/G_entry/G2_run.py" \
+            "$GEN/G_entry/G1_short_pipeline.py" \
             "$GEN/A_core/A1_config.py" \
             "$GEN/C_content/C1_hadith.py" \
             "$GEN/C_content/C9_meaning.py" \
@@ -164,20 +163,16 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      # ───── 1. CHECKOUT ─────
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # ───── 2. PYTHON SETUP ─────
       - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-          cache-dependency-path: |
-            **/requirements.txt
+          cache-dependency-path: '**/requirements.txt'
 
-      # ───── 3. SYSTEM TOOLS ─────
       - name: ⚙️ Install system tools (ffmpeg, fonts)
         run: |
           echo "::group::📦 Installing system packages"
@@ -196,7 +191,6 @@ jobs:
           python3 --version
           echo "::endgroup::"
 
-      # ───── 4. FONTS CACHE ─────
       - name: 💾 Cache fonts
         id: cache-fonts
         uses: actions/cache@v4
@@ -204,7 +198,6 @@ jobs:
           path: ~/.fonts
           key: noto-fonts-v2-${{ runner.os }}
 
-      # ───── 5. DOWNLOAD FONTS ─────
       - name: 🔤 Download Noto fonts (Hindi + Arabic + Latin)
         if: steps.cache-fonts.outputs.cache-hit != 'true'
         run: |
@@ -237,7 +230,6 @@ jobs:
           ls -lh ~/.fonts/ | head -20
           echo "::endgroup::"
 
-      # ───── 6. PYTHON PACKAGES CACHE ─────
       - name: 💾 Cache pip packages
         uses: actions/cache@v4
         with:
@@ -246,7 +238,6 @@ jobs:
           restore-keys: |
             pip-${{ runner.os }}-
 
-      # ───── 7. INSTALL PYTHON PACKAGES ─────
       - name: 📦 Install Python packages
         run: |
           echo "::group::📦 Upgrading pip"
@@ -262,10 +253,9 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::📋 Installed packages"
-          pip list | grep -E "(requests|Pillow|mutagen|google|edge-tts|gTTS|pytest)" || true
+          pip list | grep -E "(requests|Pillow|mutagen|google|edge-tts|gTTS)" || true
           echo "::endgroup::"
 
-      # ───── 8. VERIFY ENV ─────
       - name: 🔐 Verify secrets
         run: |
           echo "::group::🔐 Checking secrets availability"
@@ -296,7 +286,6 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
 
-      # ───── 9. RUN PIPELINE ─────
       - name: ▶️ Run Short Video Pipeline
         id: pipeline
         env:
@@ -360,7 +349,6 @@ jobs:
           cd "$GENERATOR_DIR"
           python3 G_entry/G2_run.py 2>&1 | tee pipeline.log
 
-      # ───── 10. SHOW LOG ON FAILURE ─────
       - name: 📋 Show pipeline log
         if: always()
         run: |
@@ -370,7 +358,6 @@ jobs:
             echo "::endgroup::"
           fi
 
-      # ───── 11. VERIFY OUTPUT ─────
       - name: 🔍 Verify Generated Video
         if: success()
         id: verify
@@ -387,64 +374,4 @@ jobs:
           THUMB=$(find "$FINAL_DIR" -name "thumbnail.jpg" -type f | head -1)
 
           if [ -z "$VIDEO" ]; then
-            echo "::error::No video found in $FINAL_DIR"
-            ls -la "$FINAL_DIR"
-            exit 1
-          fi
-
-          SIZE=$(du -h "$VIDEO" | cut -f1)
-          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO" 2>/dev/null || echo "?")
-
-          echo "  ✅ Video:     $(basename "$VIDEO")"
-          echo "  📦 Size:      $SIZE"
-          echo "  ⏱️  Duration: ${DURATION}s"
-          [ -n "$THUMB" ] && echo "  ✅ Thumbnail: $(basename "$THUMB")" || echo "  ⚠️  No thumbnail"
-
-          echo "video_path=$VIDEO" >> $GITHUB_OUTPUT
-          echo "video_size=$SIZE" >> $GITHUB_OUTPUT
-          echo "video_duration=$DURATION" >> $GITHUB_OUTPUT
-          echo "::endgroup::"
-
-      # ───── 12. UPLOAD ARTIFACTS ─────
-      - name: 📤 Upload video artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: short-video-${{ github.run_number }}
-          path: |
-            ${{ env.GENERATOR_DIR }}/output/final/*.mp4
-            ${{ env.GENERATOR_DIR }}/output/final/*.jpg
-            ${{ env.GENERATOR_DIR }}/output/final/*.srt
-            ${{ env.GENERATOR_DIR }}/pipeline.log
-          retention-days: 7
-          if-no-files-found: warn
-          compression-level: 0
-
-      # ───── 13. JOB SUMMARY ─────
-      - name: 📊 Generate Summary
-        if: always()
-        run: |
-          {
-            echo "# 🎬 Short Video Pipeline — Run #${{ github.run_number }}"
-            echo ""
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| **Status** | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |"
-            echo "| **Event** | \`${{ github.event_name }}\` |"
-            echo "| **Platform** | \`${{ needs.validate.outputs.platform }}\` |"
-            echo "| **Upload** | \`${{ needs.validate.outputs.should_upload }}\` |"
-            echo "| **Triggered by** | @${{ github.actor }} |"
-            echo "| **Run ID** | ${{ github.run_id }} |"
-
-            if [ "${{ steps.verify.outcome }}" = "success" ]; then
-              echo "| **Video Size** | ${{ steps.verify.outputs.video_size }} |"
-              echo "| **Duration** | ${{ steps.verify.outputs.video_duration }}s |"
-            fi
-
-            echo ""
-            echo "## 📁 Artifacts"
-            echo "Download from the **Artifacts** section above (retention: 7 days)."
-            echo ""
-            echo "## 🔗 Links"
-            echo "- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          } >> $GITHUB_STEP_SUMMARY
+            echo "::error::No
