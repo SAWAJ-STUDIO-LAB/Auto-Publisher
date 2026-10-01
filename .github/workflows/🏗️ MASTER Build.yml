@@ -1,8 +1,7 @@
 # ============================================================
 # FILE:      master_build.yml
 # PATH:      .github/workflows/master_build.yml
-# PURPOSE:   Build 6 platform folders + files WITH CODE
-# NOTE:      FB Story folder preserved
+# PURPOSE:   Build 6 platforms + workflows (BASE64 SAFE)
 # ============================================================
 
 name: "🏗️ MASTER Build"
@@ -11,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       wipe_all:
-        description: 'Wipe and rebuild everything? (FB Story preserved)'
+        description: 'Wipe and rebuild? (FB Story preserved)'
         required: true
         type: boolean
         default: true
@@ -48,7 +47,7 @@ jobs:
           echo "✅ Wipe done"
 
       # ====================================================
-      # STEP 2: BUILD 6 FOLDERS (structure)
+      # STEP 2: BUILD STRUCTURE (6 folders, empty)
       # ====================================================
       - name: 🏗️ Build Structure
         run: |
@@ -111,7 +110,7 @@ jobs:
           echo "✅ Structure built"
 
       # ====================================================
-      # STEP 3: COPY COMMON FILES (with content) FROM FB STORY
+      # STEP 3: COPY COMMON FILES (WITH CONTENT)
       # ====================================================
       - name: 📋 Copy Common Files
         run: |
@@ -126,37 +125,37 @@ jobs:
             "social_media/youtube/short_video" \
             "social_media/youtube/long_video"; do
 
-            # A_core (except A1_config)
             for f in __init__ A2_logger A3_telegram A4_utils A5_base_pipeline; do
-              [ -f "$SRC/A_core/$f.py" ] && cp "$SRC/A_core/$f.py" "$DST/A_core/" || true; done
+              [ -f "$SRC/A_core/$f.py" ] && cp "$SRC/A_core/$f.py" "$DST/A_core/" || true
+            done
 
-            # B_graphics (all with content)
             cp -r "$SRC/B_graphics/." "$DST/B_graphics/" 2>/dev/null || true
 
-            # C_content (common C1-C8)
             for f in __init__ C1_hadith C2_ai_provider C3_translator C4_tts C5_music C6_background C7_logo_processor C8_thumbnail; do
-              [ -f "$SRC/C_content/$f.py" ] && cp "$SRC/C_content/$f.py" "$DST/C_content/" || true; done
+              [ -f "$SRC/C_content/$f.py" ] && cp "$SRC/C_content/$f.py" "$DST/C_content/" || true
+            done
 
-            # D_video (all with content)
             cp -r "$SRC/D_video/." "$DST/D_video/" 2>/dev/null || true
-
-            # E_audio (all)
             cp -r "$SRC/E_audio/." "$DST/E_audio/" 2>/dev/null || true
 
-            # F_upload (F1 only)
             [ -f "$SRC/F_upload/__init__.py" ] && cp "$SRC/F_upload/__init__.py" "$DST/F_upload/" || true
             [ -f "$SRC/F_upload/F1_drive.py" ] && cp "$SRC/F_upload/F1_drive.py" "$DST/F_upload/" || true
 
-            # H_tests (common)
             for f in __init__ H1_conftest H3_test_media H4_test_render; do
-              [ -f "$SRC/H_tests/$f.py" ] && cp "$SRC/H_tests/$f.py" "$DST/H_tests/" || true; done
+              [ -f "$SRC/H_tests/$f.py" ] && cp "$SRC/H_tests/$f.py" "$DST/H_tests/" || true
+            done
 
-            # Root files
             for f in requirements.txt .gitignore Makefile; do
-              [ -f "$SRC/$f" ] && cp "$SRC/$f" "$DST/" || true; done
+              [ -f "$SRC/$f" ] && cp "$SRC/$f" "$DST/" || true
+            done
+
+            # G_entry rename
+            TYPE=$(basename "$DST" | sed 's/_video//')
+            cp "$SRC/G_entry/G1_story_pipeline.py" "$DST/G_entry/G1_${TYPE}_pipeline.py" 2>/dev/null || true
+            cp "$SRC/G_entry/G2_run_story.py" "$DST/G_entry/G2_run_${TYPE}.py" 2>/dev/null || true
           done
 
-          echo "✅ Common files copied WITH content"
+          echo "✅ Common files copied"
 
       # ====================================================
       # STEP 4: FILL A1_config.py (FB)
@@ -166,7 +165,6 @@ jobs:
           set -e
           printf '%s\n' \
           'import os' \
-          '' \
           '' \
           'class Config:' \
           '    TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")' \
@@ -199,7 +197,7 @@ jobs:
           > social_media/facebook/short_video/A_core/A1_config.py
 
           cp social_media/facebook/short_video/A_core/A1_config.py social_media/facebook/long_video/A_core/A1_config.py
-          echo "✅ FB A1_config filled"
+          echo "✅ FB A1_config"
 
       # ====================================================
       # STEP 5: FILL A1_config.py (IG)
@@ -209,7 +207,6 @@ jobs:
           set -e
           printf '%s\n' \
           'import os' \
-          '' \
           '' \
           'class Config:' \
           '    TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")' \
@@ -243,7 +240,7 @@ jobs:
           > social_media/instagram/story_video/A_core/A1_config.py
 
           cp social_media/instagram/story_video/A_core/A1_config.py social_media/instagram/short_video/A_core/A1_config.py
-          echo "✅ IG A1_config filled"
+          echo "✅ IG A1_config"
 
       # ====================================================
       # STEP 6: FILL A1_config.py (YT)
@@ -253,7 +250,6 @@ jobs:
           set -e
           printf '%s\n' \
           'import os' \
-          '' \
           '' \
           'class Config:' \
           '    TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")' \
@@ -288,10 +284,10 @@ jobs:
           > social_media/youtube/short_video/A_core/A1_config.py
 
           cp social_media/youtube/short_video/A_core/A1_config.py social_media/youtube/long_video/A_core/A1_config.py
-          echo "✅ YT A1_config filled"
+          echo "✅ YT A1_config"
 
       # ====================================================
-      # STEP 7: FILL FB UPLOAD FILES
+      # STEP 7: FILL FB UPLOAD
       # ====================================================
       - name: ✏️ Fill FB Upload
         run: |
@@ -300,10 +296,9 @@ jobs:
           'import os' \
           'from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api' \
           '' \
-          '' \
           'class ShortUploader:' \
           '    def __init__(self, base):' \
-          '        log_file_start("F2_upload_short.py", "FB short upload")' \
+          '        log_file_start("F2_upload_short.py", "FB upload")' \
           '        self.base = base' \
           '        log_file_end("F2_upload_short.py", "success", "Ready")' \
           '' \
@@ -322,31 +317,28 @@ jobs:
           '                    files={"source": f}, timeout=400).json()' \
           '            if res.get("id"):' \
           '                self.base.api_status["Facebook"]["Upload"] = "success"' \
-          '                log_api("F2_upload_short.py", "FB-Short", "success", res["id"])' \
+          '                log_api("F2_upload_short.py", "FB", "success", res["id"])' \
           '                return True' \
-          '            log_api("F2_upload_short.py", "FB-Short", "failed", str(res)[:100])' \
+          '            log_api("F2_upload_short.py", "FB", "failed", str(res)[:100])' \
           '            return False' \
           '        except Exception as e:' \
-          '            log_api("F2_upload_short.py", "FB-Short", "failed", str(e)[:100])' \
+          '            log_api("F2_upload_short.py", "FB", "failed", str(e)[:100])' \
           '            return False' \
           > social_media/facebook/short_video/F_upload/F2_upload_short.py
 
           cp social_media/facebook/short_video/F_upload/F2_upload_short.py social_media/facebook/long_video/F_upload/F2_upload_long.py
-          echo "✅ FB upload filled"
+          echo "✅ FB Upload"
 
       # ====================================================
-      # STEP 8: FILL IG UPLOAD FILES
+      # STEP 8: FILL IG UPLOAD (STORY)
       # ====================================================
-      - name: ✏️ Fill IG Upload
+      - name: ✏️ Fill IG Story Upload
         run: |
           set -e
-
-          # IG STORY
           printf '%s\n' \
           'import os' \
           'import time' \
           'from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api' \
-          '' \
           '' \
           'class StoryUploader:' \
           '    def __init__(self, base):' \
@@ -398,13 +390,18 @@ jobs:
           '            log_api("F2_upload_story.py", "IG-Story", "failed", str(e)[:100])' \
           '            return False' \
           > social_media/instagram/story_video/F_upload/F2_upload_story.py
+          echo "✅ IG Story Upload"
 
-          # IG SHORT
+      # ====================================================
+      # STEP 9: FILL IG REEL UPLOAD
+      # ====================================================
+      - name: ✏️ Fill IG Reel Upload
+        run: |
+          set -e
           printf '%s\n' \
           'import os' \
           'import time' \
           'from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api' \
-          '' \
           '' \
           'class ShortUploader:' \
           '    def __init__(self, base):' \
@@ -450,11 +447,10 @@ jobs:
           '            log_api("F2_upload_short.py", "IG-Reel", "failed", str(e)[:100])' \
           '            return False' \
           > social_media/instagram/short_video/F_upload/F2_upload_short.py
-
-          echo "✅ IG upload filled"
+          echo "✅ IG Reel Upload"
 
       # ====================================================
-      # STEP 9: FILL YT UPLOAD FILES
+      # STEP 10: FILL YT UPLOAD
       # ====================================================
       - name: ✏️ Fill YT Upload
         run: |
@@ -462,7 +458,6 @@ jobs:
           printf '%s\n' \
           'import os' \
           'from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api' \
-          '' \
           '' \
           'class ShortUploader:' \
           '    def __init__(self, base):' \
@@ -514,330 +509,23 @@ jobs:
           > social_media/youtube/short_video/F_upload/F2_upload_short.py
 
           cp social_media/youtube/short_video/F_upload/F2_upload_short.py social_media/youtube/long_video/F_upload/F2_upload_long.py
-          echo "✅ YT upload filled"
+          echo "✅ YT Upload"
 
       # ====================================================
-      # STEP 10: COPY G_entry FILES (with content, renamed)
+      # STEP 11: CREATE WORKFLOWS (BASE64 SAFE)
       # ====================================================
-      - name: ✏️ Fill G_entry
-        run: |
-          set -e
-          SRC="social_media/facebook/story_video"
-          for pair in \
-            "facebook/short_video:short" \
-            "facebook/long_video:long" \
-            "instagram/story_video:story" \
-            "instagram/short_video:short" \
-            "youtube/short_video:short" \
-            "youtube/long_video:long"; do
-            DIR="${pair%%:*}"; TYPE="${pair##*:}"
-            cp "$SRC/G_entry/G1_story_pipeline.py" "social_media/$DIR/G_entry/G1_${TYPE}_pipeline.py" 2>/dev/null || true
-            cp "$SRC/G_entry/G2_run_story.py" "social_media/$DIR/G_entry/G2_run_${TYPE}.py" 2>/dev/null || true
-          done
-          echo "✅ G_entry filled"
-
-      # ====================================================
-      # STEP 11: CREATE WORKFLOWS
-      # ====================================================
-      - name: 📄 Create Workflows
+      - name: 📄 Create Workflows (base64 decoded)
         run: |
           set -e
           mkdir -p .github/workflows
 
-          # ===== INSTAGRAM STORY WORKFLOW =====
-          cat > .github/workflows/instagram_story.yml << 'WSEOF'
-name: "📸 Instagram Story Video"
-on:
-  workflow_dispatch:
-    inputs:
-      upload_to_social:
-        description: 'Upload to Instagram Story?'
-        required: true
-        type: boolean
-        default: false
-  schedule:
-    - cron: '0 0 * * *'
-permissions:
-  contents: write
-  actions: write
-concurrency:
-  group: instagram-story
-  cancel-in-progress: false
-jobs:
-  story:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.TOKEN_GITHUB }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-tools
-      - id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-fonts
-      - name: Install FFmpeg & Fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
-      - name: Download Fonts
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
-      - name: Install Python
-        run: |
-          fc-cache -f -v
-          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
-      - name: Run Pipeline
-        working-directory: social_media/instagram/story_video
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
-          DRIVE_STORY_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
-          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
-          INSTAGRAM_BUSINESS_ACCOUNT_ID: ${{ secrets.INSTAGRAM_BUSINESS_ACCOUNT_ID }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
-          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
-        run: python3 G_entry/G2_run_story.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: instagram-story
-          path: social_media/instagram/story_video/output/final/Final_Story.mp4
-          retention-days: 5
-          if-no-files-found: ignore
-WSEOF
+          # ---- INSTAGRAM STORY ----
+          cat > /tmp/ig_story.b64 << 'B64'
+          bmFtZTogIvCfj7ggSW5zdGFncmFtIFN0b3J5IFZpZGVvIgpvbjoKICB3b3JrZmxvd19kaXNwYXRjaDoKICAgIGlucHV0czoKICAgICAgdXBsb2FkX3RvX3NvY2lhbDoKICAgICAgICBkZXNjcmlwdGlvbjogJ1VwbG9hZCB0byBJbnN0YWdyYW0gU3Rvcnk/JwogICAgICAgIHJlcXVpcmVkOiB0cnVlCiAgICAgICAgdHlwZTogYm9vbGVhbgogICAgICAgIGRlZmF1bHQ6IGZhbHNlCiAgc2NoZWR1bGU6CiAgICAtIGNyb246ICcwIDAgKiAqIConCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiB3cml0ZQogIGFjdGlvbnM6IHdyaXRlCmNvbmN1cnJlbmN5OgogIGdyb3VwOiBpbnN0YWdyYW0tc3RvcnkKICBjYW5jZWwtaW4tcHJvZ3Jlc3M6IGZhbHNlCmpvYnM6CiAgc3Rvcnk6CiAgICBydW5zLW9uOiB1YnVudHUtbGF0ZXN0CiAgICB0aW1lb3V0LW1pbnV0ZXM6IDkwCiAgICBzdGVwczoKICAgICAgLSB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QHY0CiAgICAgICAgd2l0aDoKICAgICAgICAgIHRva2VuOiAke3sgc2VjcmV0cy5UT0tFTl9HSVRIVUIgfX0KICAgICAgLSB1c2VzOiBhY3Rpb25zL3NldHVwLXB5dGhvbkB2NQogICAgICAgIHdpdGg6CiAgICAgICAgICBweXRob24tdmVyc2lvbjogJzMuMTEnCiAgICAgIC0gdXNlczogYWN0aW9ucy9jYWNoZUB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBwYXRoOiB+Ly5jYWNoZS9waXAKICAgICAgICAgIGtleTogJHt7IHJ1bm5lci5vcyB9fS1waXAtdG9vbHMKICAgICAgLSBpZDogY2FjaGUtZm9udHMKICAgICAgICB1c2VzOiBhY3Rpb25zL2NhY2hlQHY0CiAgICAgICAgd2l0aDoKICAgICAgICAgIHBhdGg6IH4vLmZvbnRzCiAgICAgICAgICBrZXk6ICR7eyBydW5uZXIub3MgfX0tZm9udHMKICAgICAgLSBuYW1lOiBJbnN0YWxsIEZGbXBlZyAmIEZvbnRzCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBzdWRvIGFwdC1nZXQgdXBkYXRlIC1xCiAgICAgICAgICBzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSAtcSBmZm1wZWcgZm9udHMtbm90byBmb250cy1ub3RvLWNvcmUgZm9udHMtbm90by1leHRyYSBmb250cy1ub3RvLXVpLWNvcmUgZm9udHMtZGVqYXZ1LWNvcmUgZm9udHMtbm90by1jb2xvci1lbW9qaSBmb250Y29uZmlnCiAgICAgIC0gbmFtZTogRG93bmxvYWQgRm9udHMKICAgICAgICBpZjogc3RlcHMuY2FjaGUtZm9udHMub3V0cHV0cy5jYWNoZS1oaXQgIT0gJ3RydWUnCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBta2RpciAtcCB+Ly5mb250cwogICAgICAgICAgd2dldCAtcSAtLXRpbWVvdXQ9MjAgImh0dHBzOi8vZ2l0aHViLmNvbS9nb29nbGVmb250cy9ub3RvLWZvbnRzL3Jhdy9tYWluL2hpbnRlZC90dGYvTm90b1NhbnMvTm90b1NhbnMtQm9sZC50dGYiIC1PIH4vLmZvbnRzL05vdG9TYW5zLUJvbGQudHRmIHx8IHRydWUKICAgICAgICAgIHdnZXQgLXEgLS10aW1lb3V0PTIwICJodHRwczovL2dpdGh1Yi5jb20vZ29vZ2xlZm9udHMvbm90by1mb250cy9yYXcvbWFpbi9oaW50ZWQvdHRmL05vdG9TYW5zRGV2YW5hZ2FyaS9Ob3RvU2Fuc0RldmFuYWdhcmktQm9sZC50dGYiIC1PIH4vLmZvbnRzL05vdG9TYW5zRGV2YW5hZ2FyaS1Cb2xkLnR0ZiB8fCB0cnVlCiAgICAgICAgICB3Z2V0IC1xIC0tdGltZW91dD0yMCAiaHR0cHM6Ly9naXRodWIuY29tL2dvb2dsZWZvbnRzL25vdG8tZm9udHMvcmF3L21haW4vaGludGVkL3R0Zi9Ob3RvTmFza2hBcmFiaWMvTm90b05hc2toQXJhYmljLUJvbGQudHRmIiAtTyB+Ly5mb250cy9Ob3RvTmFza2hBcmFiaWMtQm9sZC50dGYgfHwgdHJ1ZQogICAgICAtIG5hbWU6IEluc3RhbGwgUHl0aG9uCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBmYy1jYWNoZSAtZiAtdgogICAgICAgICAgcGlwIGluc3RhbGwgLS1uby1jYWNoZS1kaXIgcmVxdWVzdHMgZWRnZS10dHMgbXV0YWdlbiBQaWxsb3cgZ29vZ2xlLWFwaS1weXRob24tY2xpZW50IGdvb2dsZS1hdXRoLWh0dHBsaWIyIGdvb2dsZS1hdXRoLW9hdXRobGliCiAgICAgIC0gbmFtZTogUnVuIFBpcGVsaW5lCiAgICAgICAgd29ya2luZy1kaXJlY3Rvcnk6IHNvY2lhbF9tZWRpYS9pbnN0YWdyYW0vc3RvcnlfdmlkZW8KICAgICAgICBlbnY6CiAgICAgICAgICBURUxFR1JBTV9CT1RfVE9LRU46ICR7eyBzZWNyZXRzLlRFTEVHUkFNX0JPVF9UT0tFTiB9fQogICAgICAgICAgVEVMRUdSQU1fQ0hBVF9JRDogJHt7IHNlY3JldHMuVEVMRUdSQU1fQ0hBVF9JRCB9fQogICAgICAgICAgVE9LRU5fR0lUSFVCOiAke3sgc2VjcmV0cy5UT0tFTl9HSVRIVUIgfX0KICAgICAgICAgIEdPT0dMRV9EUklWRV9DTElFTlRfSUQ6ICR7eyBzZWNyZXRzLkdPT0dMRV9EUklWRV9DTElFTlRfSUQgfX0KICAgICAgICAgIEdPT0dMRV9EUklWRV9DTElFTlRfU0VDUkVUOiAke3sgc2VjcmV0cy5HT09HTEVfRFJJVkVfQ0xJRU5UX1NFQ1JFVCB9fQogICAgICAgICAgR09PR0xFX0RSSVZFX1JFRlJFU0hfVE9LRU46ICR7eyBzZWNyZXRzLkdPT0dMRV9EUklWRV9SRUZSRVNIX1RPS0VOIH19CiAgICAgICAgICBEUklWRV9TVE9SWV9GT0xERVJfSUQ6ICR7eyBzZWNyZXRzLkdEUklWRV9TVE9SWV9WSURFT19GT0xERVJfSUQgfX0KICAgICAgICAgIEZBQ0VCT09LX0lOU1RBR1JBTV9NRVRBX1RPS0VOOiAke3sgc2VjcmV0cy5GQUNFQk9PS19JTlNUQUdSQU1fTUVUQV9UT0tFTiB9fQogICAgICAgICAgSU5TVEFHUkFNX0JVU0lORVNTX0FDQ09VTlRfSUQ6ICR7eyBzZWNyZXRzLklOU1RBR1JBTV9CVVNJTkVTU19BQ0NPVU5UX0lEIH19CiAgICAgICAgICBPUEVOUk9VVEVSX0FQSV9LRVk6ICR7eyBzZWNyZXRzLk9QRU5ST1VURVJfQVBJX0tFWV9BSSB9fQogICAgICAgICAgR1JPUV9BUElfS0VZOiAke3sgc2VjcmV0cy5HUk9RX0FQSV9LRVlfQUkgfX0KICAgICAgICAgIEdFTUlOSV9BUElfS0VZOiAke3sgc2VjcmV0cy5HRU1JTklfQVBJX0tFWV9BSSB9fQogICAgICAgICAgTUlTVFJBTF9BUElfS0VZOiAke3sgc2VjcmV0cy5NSVNUUkFMX0FQSV9LRVlfQUkgfX0KICAgICAgICAgIENFUkVCUkFTX0FQSV9LRVk6ICR7eyBzZWNyZXRzLkNFUkVCUkFTX0FQSV9LRVlfQUkgfX0KICAgICAgICAgIENPSEVSRV9BUElfS0VZOiAke3sgc2VjcmV0cy5DT0hFUkVfQVBJX0tFWV9BSSB9fQogICAgICAgICAgSFVHR0lOR0ZBQ0VfQVBJX0tFWTogJHt7IHNlY3JldHMuSFVHR0lOR0ZBQ0VfQVBJX0tFWV9BSSB9fQogICAgICAgICAgRUxFVkVOTEFCU19BUElfS0VZOiAke3sgc2VjcmV0cy5FTEVWRU5MQUJTX0FQSV9LRVkgfX0KICAgICAgICAgIERFRVBMLUFQSV9LRVk6ICR7eyBzZWNyZXRzLkRFRVBMLUFQSV9LRVkgfX0KICAgICAgICAgIFBFWEVMU19BUElfS0VZOiAke3sgc2VjcmV0cy5QRVhFTFNfQVBJX0tFWSB9fQogICAgICAgICAgUElYQUJBWV9BUElfS0VZOiAke3sgc2VjcmV0cy5QSVhBQkFZX0FQSV9LRVkgfX0KICAgICAgICAgIEZSRUVTT1VORF9BUElfS0VZOiAke3sgc2VjcmV0cy5GUkVFU09VTkRfQVBJX0tFWSB9fQogICAgICAgICAgSEFESVRIX0FQSV9VUkw6ICR7eyBzZWNyZXRzLkhBRElUSF9BUElfVVJMIH19CiAgICAgICAgICBHSVRIVUJfRVZFTlRfTkFNRTogJHt7IGdpdGh1Yi5ldmVudF9uYW1lIH19CiAgICAgICAgICBVUExPQURfVE9fU09DSUFMOiAke3sgaW5wdXRzLnVwbG9hZF90b19zb2NpYWwgfHwgZ2l0aHViLmV2ZW50LmlucHV0cy51cGxvYWRfdG9fc29jaWFsIH19CiAgICAgICAgcnVuOiBweXRob24zIEdfZW50cnkvRzJfcnVuX3N0b3J5LnB5CiAgICAgIC0gdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICBpZjogYWx3YXlzKCkKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogaW5zdGFncmFtLXN0b3J5CiAgICAgICAgICBwYXRoOiBzb2NpYWxfbWVkaWEvaW5zdGFncmFtL3N0b3J5X3ZpZGVvL291dHB1dC9maW5hbC9GaW5hbF9TdG9yeS5tcDQKICAgICAgICAgIHJldGVudGlvbi1kYXlzOiA1CiAgICAgICAgICBpZi1uby1maWxlcy1mb3VuZDogaWdub3JlCg==
+B64
+          base64 -d /tmp/ig_story.b64 > .github/workflows/instagram_story.yml
 
-          # ===== SHORT VIDEO =====
-          cat > .github/workflows/short_video.yml << 'WSEOF'
-name: "🎬 Short Video"
-on:
-  workflow_dispatch:
-    inputs:
-      upload_to_social:
-        description: 'Upload to FB + YT + IG?'
-        required: true
-        type: boolean
-        default: false
-  schedule:
-    - cron: '30 1 * * *'
-    - cron: '30 6 * * *'
-    - cron: '30 11 * * *'
-permissions:
-  contents: write
-  actions: write
-concurrency:
-  group: short-video
-  cancel-in-progress: false
-jobs:
-  short:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [facebook, instagram, youtube]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.TOKEN_GITHUB }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-tools
-      - id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-fonts
-      - name: Install FFmpeg & Fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
-      - name: Download Fonts
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
-      - name: Install Python
-        run: |
-          fc-cache -f -v
-          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
-      - name: Run Pipeline
-        working-directory: social_media/${{ matrix.platform }}/short_video
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
-          DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_SHORT_VIDEO_FOLDER_ID }}
-          FACEBOOK_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
-          INSTAGRAM_BUSINESS_ACCOUNT_ID: ${{ secrets.INSTAGRAM_BUSINESS_ACCOUNT_ID }}
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          DAILY_HADEES_YT_PLAYLIST_ID: ${{ secrets.DAILY_HADEES_YT_PLAYLIST_ID }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
-          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
-        run: python3 G_entry/G2_run_short.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: short-${{ matrix.platform }}
-          path: social_media/${{ matrix.platform }}/short_video/output/final/Final_Short_Video.mp4
-          retention-days: 5
-          if-no-files-found: ignore
-WSEOF
-
-          # ===== LONG VIDEO =====
-          cat > .github/workflows/long_video.yml << 'WSEOF'
-name: "🎥 Long Video"
-on:
-  workflow_dispatch:
-    inputs:
-      upload_to_social:
-        description: 'Upload to FB + YT Long?'
-        required: true
-        type: boolean
-        default: false
-  schedule:
-    - cron: '0 14 * * *'
-permissions:
-  contents: write
-  actions: write
-concurrency:
-  group: long-video
-  cancel-in-progress: false
-jobs:
-  long:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [facebook, youtube]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.TOKEN_GITHUB }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-tools
-      - id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-fonts
-      - name: Install FFmpeg & Fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
-      - name: Download Fonts
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
-      - name: Install Python
-        run: |
-          fc-cache -f -v
-          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
-      - name: Run Pipeline
-        working-directory: social_media/${{ matrix.platform }}/long_video
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
-          DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_LONG_VIDEO_FOLDER_ID }}
-          FACEBOOK_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          DAILY_HADEES_YT_PLAYLIST_ID: ${{ secrets.DAILY_HADEES_YT_PLAYLIST_ID }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
-          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
-        run: python3 G_entry/G2_run_long.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: long-${{ matrix.platform }}
-          path: social_media/${{ matrix.platform }}/long_video/output/final/Final_Long_Video.mp4
-          retention-days: 7
-          if-no-files-found: ignore
-WSEOF
-
-          echo "✅ 3 workflows created"
+          echo "✅ Instagram Story workflow created"
 
       # ====================================================
       # STEP 12: SHOW + COMMIT
@@ -845,7 +533,7 @@ WSEOF
       - name: 🌳 Show Tree
         run: |
           echo "==== FOLDERS ===="
-          find social_media -type d | sort
+          find social_media -type d | sort | head -30
           echo ""
           echo "==== WORKFLOWS ===="
           ls .github/workflows/
@@ -858,5 +546,5 @@ WSEOF
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "feat: MASTER build — 6 platforms + 3 workflows + all content" || exit 0
+          git commit -m "feat: master build — 6 platforms + files + workflows" || exit 0
           git push
