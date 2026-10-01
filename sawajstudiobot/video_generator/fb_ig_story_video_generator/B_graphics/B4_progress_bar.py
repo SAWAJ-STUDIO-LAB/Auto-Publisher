@@ -64,4 +64,4 @@ def draw_progress(draw, current, total, y=1820):
         draw.ellipse(
             [gx - 8, y - 4, gx + 8, y + 12],
             fill=(255, 220, 120, 220)
-      )
+        )
