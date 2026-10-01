@@ -1,5 +1,16 @@
-name: "🎬Facebook_Short_Video"
+# ============================================================
+# 📄 FILE:      facebook_short.yml
+# 📁 PATH:      .github/workflows/facebook_short.yml
+# 🎯 PURPOSE:   Facebook Short Video generation (3x daily)
+# ⏰ SCHEDULE:  7:00 AM, 12:00 PM, 5:00 PM IST
+# ============================================================
 
+name: "🎬 Facebook Short Video"
+
+
+# ─────────────────────────────────────────────────────────────
+# ① TRIGGERS
+# ─────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
     inputs:
@@ -9,40 +20,56 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '30 1 * * *'
-    - cron: '30 6 * * *'
-    - cron: '30 11 * * *'
+    - cron: '30 1 * * *'    # 7:00 AM IST
+    - cron: '30 6 * * *'    # 12:00 PM IST
+    - cron: '30 11 * * *'   # 5:00 PM IST
 
+
+# ─────────────────────────────────────────────────────────────
+# ② PERMISSIONS
+# ─────────────────────────────────────────────────────────────
 permissions:
   contents: write
   actions: write
 
+
+# ─────────────────────────────────────────────────────────────
+# ③ CONCURRENCY
+# ─────────────────────────────────────────────────────────────
 concurrency:
   group: facebook-short
   cancel-in-progress: false
 
+
+# ─────────────────────────────────────────────────────────────
+# ④ JOBS
+# ─────────────────────────────────────────────────────────────
 jobs:
   short:
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
+      # ───────── Step 1: Checkout ─────────
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.TOKEN_GITHUB }}
 
+      # ───────── Step 2: Setup Python ─────────
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # ───────── Step 3: Cache pip ─────────
       - name: 📦 Cache Python Packages
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-tools
 
+      # ───────── Step 4: Cache fonts ─────────
       - name: 🔤 Cache Custom Fonts
         id: cache-fonts
         uses: actions/cache@v4
@@ -50,11 +77,13 @@ jobs:
           path: ~/.fonts
           key: ${{ runner.os }}-custom-fonts
 
+      # ───────── Step 5: Install FFmpeg + Fonts ─────────
       - name: 🛠️ Install FFmpeg & Fonts
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
 
+      # ───────── Step 6: Download custom fonts ─────────
       - name: ⬇️ Download Custom Fonts
         if: steps.cache-fonts.outputs.cache-hit != 'true'
         run: |
@@ -66,12 +95,14 @@ jobs:
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
           wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
 
+      # ───────── Step 7: Install Python packages ─────────
       - name: 📚 Install Python Packages
         run: |
           fc-cache -f -v
           pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-      - name: 🎬 Run Facebook Short
+      # ───────── Step 8: Run pipeline ─────────
+      - name: 🎬 Run Short Pipeline
         working-directory: social_media/facebook/short_video
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -100,6 +131,7 @@ jobs:
           UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
         run: python3 G_entry/G2_run_short.py
 
+      # ───────── Step 9: Upload artifact ─────────
       - name: 📤 Upload Artifact
         if: always()
         uses: actions/upload-artifact@v4
