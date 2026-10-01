@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      B7_watermark.py
-# PATH:      social_media/facebook/story_video/B_graphics/B7_watermark.py
-# PURPOSE:   Watermark + floating logo
+# 📄 FILE:      B7_watermark.py
+# 📁 PATH:      social_media/facebook/long_video/B_graphics/B7_watermark.py
+# 🎯 PURPOSE:   Watermark + floating logo draw
 # ============================================================
 
 import os
@@ -11,10 +11,12 @@ from PIL import Image
 
 def draw_watermark(img, logo_path="avatar.png", size=(160, 68),
                    pos="top-right", opacity=0.55):
+    """Draw semi-transparent watermark."""
     if not os.path.exists(logo_path):
         return
     try:
-        wm = Image.open(logo_path).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+        wm = Image.open(logo_path).convert("RGBA").resize(
+            size, Image.Resampling.LANCZOS)
         alpha = wm.split()[3].point(lambda v: int(v * opacity))
         wm.putalpha(alpha)
         if pos == "top-right":
@@ -33,10 +35,12 @@ def draw_watermark(img, logo_path="avatar.png", size=(160, 68),
 
 
 def draw_floating_logo(img, t, logo_path="avatar.png", size=(240, 100)):
+    """Draw floating logo with sine wave motion."""
     if not os.path.exists(logo_path):
         return
     try:
-        logo = Image.open(logo_path).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+        logo = Image.open(logo_path).convert("RGBA").resize(
+            size, Image.Resampling.LANCZOS)
         x = 80 + int(30 * math.sin(t * 0.8))
         y = 1500 + int(20 * math.sin(t * 1.2))
         img.paste(logo, (x, y), logo)
