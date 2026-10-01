@@ -1,18 +1,22 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      A1_config.py                              ║
-# ║  📁 PATH:      .../A_core/A1_config.py                   ║
-# ║  🎯 PURPOSE:   Config — 2 modes only (offline/online)    ║
+# ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
+# ║                A_core/A1_config.py                       ║
+# ║  🎯 PURPOSE:   Config — offline/online mode (STORY)      ║
 # ║  📖 FOLDER:    A_core                                    ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   ⚙️  CONFIG MODULE                                       ║
-║   ═══════════════════                                    ║
+║   ⚙️  CONFIG MODULE (STORY)                              ║
+║   ═══════════════════════                                ║
 ║                                                          ║
 ║   🎯 Upload Modes:                                       ║
 ║      • offline → Sirf Google Drive                       ║
 ║      • online  → Google Drive + Social Media             ║
+║                                                          ║
+║   🔐 Safety:                                             ║
+║      • online mode → confirm_upload checkbox zaroori     ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
@@ -21,7 +25,7 @@ import os
 
 
 class Config:
-    """Config — simple offline/online upload system."""
+    """Config — offline/online upload system (Story)."""
 
     # ─── TELEGRAM ───
     TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -46,8 +50,6 @@ class Config:
     DRIVE_CLIENT_SECRET = os.environ.get("GOOGLE_DRIVE_CLIENT_SECRET")
     DRIVE_REFRESH_TOKEN = os.environ.get("GOOGLE_DRIVE_REFRESH_TOKEN")
     DRIVE_STORY_FOLDER_ID = os.environ.get("GDRIVE_STORY_VIDEO_FOLDER_ID")
-    DRIVE_SHORT_FOLDER_ID = os.environ.get("GDRIVE_SHORT_VIDEO_FOLDER_ID")
-    DRIVE_LONG_FOLDER_ID = os.environ.get("GDRIVE_LONG_VIDEO_FOLDER_ID")
 
     # ─── AI PROVIDERS ───
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
@@ -58,11 +60,11 @@ class Config:
     COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
     HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACE_API_KEY")
 
-    # ─── TTS ───
+    # ─── TTS / TRANSLATION ───
     ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
     DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
 
-    # ─── MEDIA ───
+    # ─── MEDIA APIS ───
     PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
     PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY")
     FREESOUND_API_KEY = os.environ.get("FREESOUND_API_KEY")
@@ -106,12 +108,10 @@ class Config:
         return False
 
     def available_platforms(self):
-        """Which platforms have credentials?"""
+        """Which platforms have credentials? (Story: FB + IG)"""
         available = []
         if self.META_TOKEN and self.PAGE_ID:
             available.append("facebook")
         if self.IG_TOKEN and self.IG_BUSINESS_ID:
             available.append("instagram")
-        if self.YT_REFRESH_TOKEN and self.YT_CLIENT_ID:
-            available.append("youtube")
         return available
