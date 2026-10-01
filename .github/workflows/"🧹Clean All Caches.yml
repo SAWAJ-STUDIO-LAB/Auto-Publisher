@@ -1,24 +1,32 @@
 # ============================================================
 # 📄 FILE:      clean_cache.yml
 # 📁 PATH:      .github/workflows/clean_cache.yml
-# 🎯 PURPOSE:   Clean ALL caches (Python, fonts, artifacts)
+# 🎯 PURPOSE:   Clean caches + old runs — TICK MARK MODE
 # ⚡ TRIGGER:   Manual only
 # ============================================================
 
-name: "🧹 Clean All Caches"
+name: "🧹 Clean Caches (Safe)"
 
 
 # ─────────────────────────────────────────────────────────────
-# ① TRIGGER
+# ① TRIGGER — Workflow dispatch with inputs
 # ─────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
     inputs:
+      # ① TICK MARK — Delete confirm karo
       confirm:
-        description: 'Delete all caches? (true/false)'
+        description: '✅ Tick karo — Delete caches + old runs'
         required: true
         type: boolean
-        default: true
+        default: false
+
+      # ② KITNE DIN PURANE RUNS
+      days_old:
+        description: '📅 Delete runs older than N days (30, 60, 90)'
+        required: false
+        type: string
+        default: '30'
 
 
 # ─────────────────────────────────────────────────────────────
@@ -35,7 +43,7 @@ permissions:
 jobs:
   clean:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       # ───────── Step 1: Checkout ─────────
@@ -44,77 +52,136 @@ jobs:
         with:
           token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
 
-      # ───────── Step 2: Install GitHub CLI ─────────
+      # ───────── Step 2: Check tick mark ─────────
+      - name: 🔍 Verify Tick Mark
+        run: |
+          if [ "${{ inputs.confirm }}" != "true" ]; then
+            echo "❌ Tick mark nahi lagaya — workflow cancel"
+            echo ""
+            echo "👉 Dobara run karo aur TICK lagao"
+            exit 1
+          fi
+          echo "✅ Tick mark confirmed"
+          echo ""
+          echo "Settings:"
+          echo "  - Delete caches: YES"
+          echo "  - Delete runs older than: ${{ inputs.days_old }} days"
+
+      # ───────── Step 3: Install GitHub CLI ─────────
       - name: 🔧 Install GitHub CLI
         run: |
-          type -p gh || (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update && sudo apt-get install gh -y)
+          type -p gh || (
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
+            sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | \
+            sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+            sudo apt-get update && \
+            sudo apt-get install gh -y
+          )
 
-      # ───────── Step 3: Delete all caches ─────────
-      - name: 🗑️ Delete All GitHub Caches
-        if: ${{ inputs.confirm == true }}
+      # ───────── Step 4: BEFORE state ─────────
+      - name: 📊 BEFORE — Count
         env:
           GH_TOKEN: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
         run: |
           echo "============================================"
-          echo "🧹 DELETING ALL GITHUB CACHES"
+          echo "📊 BEFORE CLEANUP"
           echo "============================================"
           echo ""
+          echo "Caches:"
+          gh cache list --repo ${{ github.repository }} --limit 200 2>/dev/null | wc -l || echo "0"
+          echo ""
+          echo "Workflow runs:"
+          gh run list --repo ${{ github.repository }} --limit 500 2>/dev/null | wc -l || echo "0"
+          echo "============================================"
 
-          # Delete all caches via GitHub CLI
+      # ───────── Step 5: Delete all caches ─────────
+      - name: 🗑️ Delete All Caches
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "============================================"
+          echo "🧹 DELETING ALL CACHES"
+          echo "============================================"
+          echo ""
           gh cache delete --all --repo ${{ github.repository }} || true
-
           echo ""
           echo "✅ All caches deleted"
 
-      # ───────── Step 4: Show remaining caches ─────────
-      - name: 📊 Show Remaining Caches
+      # ───────── Step 6: Delete old runs ─────────
+      - name: 🗑️ Delete Runs Older Than ${{ inputs.days_old }} Days
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+        run: |
+          DAYS=${{ inputs.days_old }}
+          echo "============================================"
+          echo "🧹 DELETING RUNS OLDER THAN $DAYS DAYS"
+          echo "============================================"
+          echo ""
+
+          # Calculate cutoff date
+          CUTOFF=$(date -d "$DAYS days ago" -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "Cutoff date: $CUTOFF"
+          echo ""
+
+          # Get all runs older than cutoff
+          gh api "repos/${{ github.repository }}/actions/runs?per_page=100&created=<${CUTOFF}" \
+            --paginate -q '.workflow_runs[] | "\(.id) \(.name) \(.created_at)"' 2>/dev/null > /tmp/old_runs.txt || true
+
+          total=$(wc -l < /tmp/old_runs.txt)
+          echo "Found $total runs to delete"
+          echo ""
+
+          count=0
+          while read line; do
+            if [ -n "$line" ]; then
+              run_id=$(echo "$line" | awk '{print $1}')
+              run_name=$(echo "$line" | awk '{print $2" "$3" "$4}')
+              if [ -n "$run_id" ]; then
+                if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" 2>/dev/null; then
+                  count=$((count + 1))
+                  echo "  ✅ Deleted: $run_id — $run_name"
+                else
+                  echo "  ⚠️ Skipped: $run_id"
+                fi
+              fi
+            fi
+          done < /tmp/old_runs.txt
+
+          echo ""
+          echo "✅ Total deleted: $count runs"
+
+      # ───────── Step 7: AFTER state ─────────
+      - name: 📊 AFTER — Count
         if: always()
         env:
           GH_TOKEN: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
         run: |
           echo "============================================"
-          echo "📊 REMAINING CACHES"
-          echo "============================================"
-          gh cache list --repo ${{ github.repository }} || echo "No caches found"
-
-      # ───────── Step 5: Delete old workflow runs (optional) ─────────
-      - name: 🗑️ Delete Old Workflow Runs
-        if: ${{ inputs.confirm == true }}
-        env:
-          GH_TOKEN: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
-        run: |
-          echo "============================================"
-          echo "🧹 DELETING OLD WORKFLOW RUNS"
+          echo "📊 AFTER CLEANUP"
           echo "============================================"
           echo ""
-
-          # Delete workflow runs older than 7 days
-          # Keep only the last 50 runs per workflow
-          for workflow in "facebook_story.yml" "facebook_short.yml" "facebook_long.yml" "instagram_story.yml" "instagram_short.yml" "youtube_short.yml" "youtube_long.yml"; do
-            echo "→ Processing $workflow"
-            gh run list --workflow="$workflow" --limit 100 --json databaseId --jq '.[50:][] | .databaseId' 2>/dev/null | while read run_id; do
-              if [ -n "$run_id" ]; then
-                gh run delete "$run_id" 2>/dev/null || true
-                echo "  Deleted run $run_id"
-              fi
-            done
-          done
-
+          echo "Remaining caches:"
+          gh cache list --repo ${{ github.repository }} --limit 200 2>/dev/null | wc -l || echo "0"
           echo ""
-          echo "✅ Old workflow runs cleaned"
+          echo "Remaining workflow runs:"
+          gh run list --repo ${{ github.repository }} --limit 500 2>/dev/null | wc -l || echo "0"
+          echo "============================================"
 
-      # ───────── Step 6: Show summary ─────────
+      # ───────── Step 8: Summary ─────────
       - name: 📋 Summary
         if: always()
         run: |
           echo "============================================"
-          echo "🎉 CACHE CLEANUP COMPLETE"
+          echo "🎉 CLEANUP COMPLETE"
           echo "============================================"
           echo ""
-          echo "✓ All GitHub caches deleted"
-          echo "✓ Old workflow runs removed"
-          echo "✓ Storage space freed"
+          echo "✓ All caches deleted"
+          echo "✓ Runs older than ${{ inputs.days_old }} days deleted"
+          echo "✓ Recent runs PRESERVED (history safe)"
+          echo "✓ Storage freed"
           echo ""
           echo "Next workflow runs will rebuild caches"
-          echo "freshly (may take 1-2 min extra for first run)"
+          echo "(1-2 min extra on first run)"
           echo "============================================"
