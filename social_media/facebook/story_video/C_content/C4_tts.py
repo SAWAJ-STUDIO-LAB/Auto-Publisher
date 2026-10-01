@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C4_tts.py
-# PATH:      social_media/facebook/story_video/C_content/C4_tts.py
-# PURPOSE:   Text-to-Speech (ElevenLabs + edge-tts)
+# 📄 FILE:      C4_tts.py
+# 📁 PATH:      social_media/facebook/story_video/C_content/C4_tts.py
+# 🎯 PURPOSE:   Text-to-Speech with speed adjust (50-55s target)
 # ============================================================
 
 import os
@@ -9,17 +9,44 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 from A_core.A4_utils import sanitize
 
 
+# ─────────────────────────────────────────────────────────────
+# ① TTS CLASS
+# ─────────────────────────────────────────────────────────────
 class TTS:
+    """
+    Generate voice from text.
+    Speed is adjustable based on target duration.
+    Target: 50-55 seconds
+    """
 
+    DEFAULT_RATE = "-7%"     # Slightly slower than normal
+    MAX_RATE = "+5%"         # If too long, speed up
+    MIN_RATE = "-12%"        # If too short, slow down
+
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("C4_tts.py", "Text-to-Speech generation")
         self.base = base
         log_file_end("C4_tts.py", "success", "Ready")
 
-    def generate(self, text, outfile):
-        log_step("C4_tts.py", f"generate({outfile})", "ok", f"{len(text)} chars")
+    # ─────────────────────────────────────────────────────────
+    # ③ GENERATE — generate voice
+    # ─────────────────────────────────────────────────────────
+    def generate(self, text, outfile, rate=None):
+        """
+        Generate voice.
+        rate: optional rate string like "-7%" or "+5%"
+        """
+        if rate is None:
+            rate = self.DEFAULT_RATE
+
+        log_step("C4_tts.py", f"generate({outfile})", "ok",
+                 f"{len(text)} chars, rate={rate}")
         text = sanitize(text)
 
+        # ═══════════════ Try ElevenLabs ═══════════════
         el = os.environ.get("ELEVENLABS_API_KEY")
         if el:
             try:
@@ -55,14 +82,16 @@ class TTS:
                 self.base.api_status["TTS"]["ElevenLabs"] = "failed"
                 log_api("C4_tts.py", "ElevenLabs", "failed", str(e)[:60])
 
+        # ═══════════════ Fallback: edge-tts ═══════════════
         try:
-            log_step("C4_tts.py", "Trying edge-tts", "info")
+            log_step("C4_tts.py", f"Trying edge-tts (rate={rate})", "info")
             tmp = outfile + ".txt"
             with open(tmp, "w", encoding="utf-8") as f:
                 f.write(text)
             self.base.run_cmd(
                 f'edge-tts --file "{tmp}" --write-media "{outfile}" '
-                f'--voice hi-IN-MadhurNeural --rate=-7% --pitch=-2Hz --volume=+8%')
+                f'--voice hi-IN-MadhurNeural --rate={rate} '
+                f'--pitch=-2Hz --volume=+8%')
             if os.path.exists(tmp):
                 os.remove(tmp)
             self.base.api_status["TTS"]["edge-tts"] = "success"
