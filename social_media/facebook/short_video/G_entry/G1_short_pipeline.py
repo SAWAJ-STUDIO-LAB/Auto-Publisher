@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      G1_story_pipeline.py
-# PATH:      social_media/facebook/story_video/G_entry/G1_story_pipeline.py
-# PURPOSE:   Orchestrate all steps
+# 📄 FILE:      G1_short_pipeline.py
+# 📁 PATH:      social_media/facebook/short_video/G_entry/G1_short_pipeline.py
+# 🎯 PURPOSE:   Orchestrate all steps — main pipeline
 # ============================================================
 
 import os
@@ -23,18 +23,26 @@ from D_video.D6_composer import Composer
 from E_audio.E1_voice_ducking import VoiceDucking
 from E_audio.E3_mastering import Mastering
 from F_upload.F1_drive import Drive
-from F_upload.F2_upload_story import StoryUploader
+from F_upload.F2_upload_short import ShortUploader
 
 
-class StoryPipeline(BasePipeline):
+# ─────────────────────────────────────────────────────────────
+# ① SHORT PIPELINE CLASS
+# ─────────────────────────────────────────────────────────────
+class ShortPipeline(BasePipeline):
+    """Main orchestrator for Facebook Short generation."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② RUN — main pipeline
+    # ─────────────────────────────────────────────────────────
     def run(self):
         from A_core.A3_telegram import header
 
-        log_file_start("G1_story_pipeline.py", "Full pipeline orchestration")
-        header("FACEBOOK MORNING STORY")
+        log_file_start("G1_short_pipeline.py", "Full pipeline orchestration")
+        header("FACEBOOK SHORT VIDEO")
 
         try:
+            # ═══════════════ INIT MODULES ═══════════════
             ai = AIProvider(self)
             translator = Translator(self, ai)
             tts = TTS(self)
@@ -45,38 +53,45 @@ class StoryPipeline(BasePipeline):
             composer = Composer(self)
             hadith = Hadith(self)
             drive = Drive(self)
-            uploader = StoryUploader(self)
+            uploader = ShortUploader(self)
             thumbnail = Thumbnail(self)
             ducking = VoiceDucking(self)
             mastering = Mastering(self)
 
+            # ═══════════════ STEP 1: FETCH HADITH ═══════════════
             header("STEP 1: Fetch Hadith")
             h = hadith.fetch()
-            log_step("G1_story_pipeline.py", "Hadith fetched", "ok",
+            log_step("G1_short_pipeline.py", "Hadith fetched", "ok",
                      f"{h['collection']} #{h['number']}")
 
+            # ═══════════════ STEP 2: TRANSLATE ═══════════════
             header("STEP 2: Hindi Translation")
             hindi = translator.to_hindi(h["english"])
-            log_step("G1_story_pipeline.py", "Translation done", "ok")
+            log_step("G1_short_pipeline.py", "Translation done", "ok")
 
+            # ═══════════════ STEP 3: TTS ═══════════════
             header("STEP 3: Text-to-Speech")
             tts.generate(f"हदीस शरीफ। {hindi}", "s_raw.mp3")
             mastering.master_voice("s_raw.mp3", "s_v.mp3")
             voice_dur = MP3("s_v.mp3").info.length
-            log_step("G1_story_pipeline.py", "Voice ready", "ok",
+            log_step("G1_short_pipeline.py", "Voice ready", "ok",
                      f"{voice_dur:.1f}s")
 
+            # ═══════════════ STEP 4: MUSIC ═══════════════
             header("STEP 4: Background Music")
             music.get("music_soft.mp3")
             ducking.mix("s_v.mp3", "music_soft.mp3", "s_voice.mp3", voice_dur)
 
+            # ═══════════════ STEP 5: BACKGROUND ═══════════════
             header("STEP 5: Background Video")
-            bg_dur = voice_dur + 2.5 + 3.0 + 0.5
+            bg_dur = voice_dur + 2.0 + 2.0 + 0.5
             bg_file = bg.get(bg_dur)
 
+            # ═══════════════ STEP 6: LOGO ═══════════════
             header("STEP 6: Logo Processing")
             has_logo = logo_proc.make("avatar.png")
 
+            # ═══════════════ STEP 7: FRAMES ═══════════════
             header("STEP 7: Generate Frames")
             hadith_label = f"#{h['number']} · {h['collection']}"
             total = frames.generate(
@@ -85,40 +100,47 @@ class StoryPipeline(BasePipeline):
                 urdu=h.get("arabic", ""),
                 english=h["english"],
                 hadith_label=hadith_label,
-                out_dir="s_frames")
+                out_dir="p_frames")
 
+            # ═══════════════ STEP 8: COMPOSE VIDEO ═══════════════
             header("STEP 8: Compose Final Video")
             final = composer.compose(
-                bg_file, "s_frames", "s_voice.mp3",
-                total, "output/final/Final_Story.mp4")
-            log_step("G1_story_pipeline.py", "Video composed", "ok",
+                bg_file, "p_frames", "s_voice.mp3",
+                total, "output/final/Final_Short_Video.mp4")
+            log_step("G1_short_pipeline.py", "Video composed", "ok",
                      f"{os.path.getsize(final)/1024/1024:.1f} MB")
 
+            # ═══════════════ STEP 9: THUMBNAIL ═══════════════
             header("STEP 9: Thumbnail")
             thumbnail.make(hindi, h.get("arabic", ""),
                            h["english"], hadith_label,
                            "output/final/thumbnail.jpg")
 
+            # ═══════════════ STEP 10: DRIVE BACKUP ═══════════════
             header("STEP 10: Google Drive Backup")
-            drive.upload(final, "Story")
+            drive.upload(final, "Short")
 
-            header("STEP 11: Facebook Story Upload")
+            # ═══════════════ STEP 11: FACEBOOK UPLOAD ═══════════════
+            header("STEP 11: Facebook Upload")
             if self.cfg.should_post_social:
-                uploader.upload(final)
+                # Build caption
+                caption = f"📖 हदीस शरीफ़\n\n{hindi}\n\n#{h['collection'].replace(' ', '')} #Hadith #Islamic"
+                uploader.upload(final, caption)
             else:
-                log_step("G1_story_pipeline.py", "FB upload skipped", "skip")
+                log_step("G1_short_pipeline.py", "FB upload skipped", "skip")
 
+            # ═══════════════ STEP 12: CLEANUP ═══════════════
             header("STEP 12: Cleanup")
             self.cleanup(
                 ["s_raw.mp3", "s_v.mp3", "s_voice.mp3",
                  "tmp.mp4", "music_raw.mp3"],
-                folder="s_frames")
+                folder="p_frames")
 
-            header("FACEBOOK MORNING STORY COMPLETED")
-            log_file_end("G1_story_pipeline.py", "success",
+            header("FACEBOOK SHORT COMPLETED")
+            log_file_end("G1_short_pipeline.py", "success",
                          f"Total {total:.1f}s")
 
         except Exception as e:
             tb = traceback.format_exc()
-            log_error("G1_story_pipeline.py", str(e), tb)
+            log_error("G1_short_pipeline.py", str(e), tb)
             raise
