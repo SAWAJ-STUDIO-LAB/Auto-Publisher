@@ -1,0 +1,15 @@
+# ============================================================
+# FILE:      pyproject.toml
+# PATH:      social_media/instagram/story_video/pyproject.toml
+# PURPOSE:   Project config
+# ============================================================
+
+[project]
+name = "instagram-story-video"
+version = "1.0.0"
+description = "Automated Instagram Story Video Generator"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["H_tests"]
+python_files = "H*_test_*.py"
