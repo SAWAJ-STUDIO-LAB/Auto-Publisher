@@ -1,22 +1,33 @@
 # ============================================================
-# FILE:      C3_translator.py
-# PATH:      social_media/facebook/story_video/C_content/C3_translator.py
-# PURPOSE:   English → Hindi translation
+# 📄 FILE:      C3_translator.py
+# 📁 PATH:      social_media/facebook/story_video/C_content/C3_translator.py
+# 🎯 PURPOSE:   English → Hindi translation (DeepL + AI fallback)
 # ============================================================
 
 import os
 from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
+# ─────────────────────────────────────────────────────────────
+# ① TRANSLATOR CLASS
+# ─────────────────────────────────────────────────────────────
 class Translator:
+    """Translate English hadith to Hindi."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self, base, ai):
         log_file_start("C3_translator.py", "English → Hindi translation")
         self.base = base
         self.ai = ai
         log_file_end("C3_translator.py", "success", "Ready")
 
+    # ─────────────────────────────────────────────────────────
+    # ③ DEEPL — try DeepL API first
+    # ─────────────────────────────────────────────────────────
     def deepl(self, text):
+        """Try DeepL API first."""
         key = os.environ.get("DEEPL_API_KEY")
         if not key:
             self.base.api_status["Translation"]["DeepL"] = "hold (no key)"
@@ -40,16 +51,22 @@ class Translator:
             log_api("C3_translator.py", "DeepL", "failed", str(e)[:60])
         return None
 
+    # ─────────────────────────────────────────────────────────
+    # ④ TO HINDI — get Hindi translation with fallback
+    # ─────────────────────────────────────────────────────────
     def to_hindi(self, english):
+        """Get Hindi translation with fallback."""
         log_step("C3_translator.py", "to_hindi()", "ok")
         hindi = self.deepl(english)
         if hindi:
             return hindi
 
+        # Fallback to AI
         log_step("C3_translator.py", "DeepL failed → AI fallback", "warn")
         result = self.ai.call(
             f"Is English Hadith ka soft accurate Hindi tarjuma likho. "
-            f"Sirf tarjuma. Koi extra baat mat likho.\n\n{english}",
+            f"Sirf tarjuma. Koi extra baat mat likho. "
+            f"Hadith ki har line ka tarjuma karo, kuch mat chhodo.\n\n{english}",
             task="hindi")
         if result:
             log_step("C3_translator.py", "AI translation done", "ok")
