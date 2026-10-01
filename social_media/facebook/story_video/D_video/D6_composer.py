@@ -44,4 +44,7 @@ class Composer:
             f'-c:v libx264 -preset veryfast -crf 17 -b:v 7M '
             f'-c:a aac -b:a 192k -t {total:.2f} -movflags +faststart {outfile}')
 
-        size_mb = os.path.getsize(outfile) /
+        size_mb = os.path.getsize(outfile) / 1024 / 1024
+        log_step("D6_composer.py", f"Video ready: {outfile}", "ok",
+                 f"{size_mb:.1f} MB")
+        return outfile
