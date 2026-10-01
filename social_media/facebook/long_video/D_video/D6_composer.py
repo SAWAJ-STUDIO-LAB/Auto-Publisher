@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      D6_composer.py
-# PATH:      social_media/facebook/story_video/D_video/D6_composer.py
-# PURPOSE:   Compose final video from frames + audio
+# 📄 FILE:      D6_composer.py
+# 📁 PATH:      social_media/facebook/long_video/D_video/D6_composer.py
+# 🎯 PURPOSE:   Compose final video from frames + audio
 # ============================================================
 
 import os
@@ -9,6 +9,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
 class Composer:
+    """Final video composer using FFmpeg."""
 
     def __init__(self, base):
         log_file_start("D6_composer.py", "Final video composition")
@@ -16,7 +17,7 @@ class Composer:
         log_file_end("D6_composer.py", "success", "Ready")
 
     def compose(self, bg, frames_dir, voice, total,
-                outfile="output/final/Final_Story.mp4"):
+                outfile="output/final/Final_Long_Video.mp4"):
         log_step("D6_composer.py", "compose() starting", "ok",
                  f"total={total:.1f}s")
 
@@ -31,7 +32,7 @@ class Composer:
             f'eq=contrast=1.08:brightness=0.02:saturation=1.12,vignette=PI/6,'
             f'format=yuv420p[outv]" '
             f'-map "[outv]" -map 2:a '
-            f'-c:v libx264 -preset veryfast -crf 17 -b:v 7M '
+            f'-c:v libx264 -preset veryfast -crf 20 -b:v 5M '
             f'-c:a aac -b:a 192k -t {total:.2f} -movflags +faststart {outfile}')
 
         size_mb = os.path.getsize(outfile) / 1024 / 1024
