@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      H2_test_story.py
-# PATH:      social_media/facebook/story_video/H_tests/H2_test_story.py
-# PURPOSE:   Basic tests
+# 📄 FILE:      H2_test_short.py
+# 📁 PATH:      social_media/facebook/short_video/H_tests/H2_test_short.py
+# 🎯 PURPOSE:   Basic tests for config + utils
 # ============================================================
 
 from A_core.A1_config import Config
