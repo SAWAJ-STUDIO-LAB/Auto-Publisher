@@ -1,8 +1,7 @@
 # ============================================================
-# FILE:      D2_main_content.py
-# PATH:      social_media/facebook/story_video/D_video/D2_main_content.py
-# PURPOSE:   Main content — word-by-word 3-language display
-# NOTE:      Calls B6_bullets with elapsed time for word change
+# 📄 FILE:      D2_main_content.py
+# 📁 PATH:      social_media/facebook/long_video/D_video/D2_main_content.py
+# 🎯 PURPOSE:   Main content (3-language word-by-word display)
 # ============================================================
 
 from B_graphics.B3_sparkles import draw_sparkles
@@ -14,41 +13,19 @@ from B_graphics.B7_watermark import draw_watermark, draw_floating_logo
 
 def draw_main(img, draw, mt, voice_dur, hindi, urdu, english,
               hadith_label, has_logo):
-    """
-    Draw main content frame.
-    
-    Args:
-        img: PIL Image
-        draw: PIL ImageDraw
-        mt: elapsed seconds in main content
-        voice_dur: total voice duration
-        hindi: Hindi text
-        urdu: Arabic text
-        english: English text
-        hadith_label: e.g. "#341 · Sahih al-Bukhari"
-        has_logo: bool
-    """
     alpha = min(1.0, mt / 0.5)
 
-    # ----- Hadith badge (top-left) -----
     if hadith_label:
         draw_badge(draw, hadith_label, y=180)
 
-    # ----- Watermark + floating logo -----
     if has_logo:
-        # Small watermark (top-right, 55% opacity)
         draw_watermark(img, "avatar.png", size=(160, 68),
                        pos="top-right", opacity=0.55)
-        # Floating logo (bottom-left, sine wave)
         draw_floating_logo(img, mt, "avatar.png", size=(240, 100))
 
-    # ----- 3-language word-by-word bullets -----
-    # This shows ONLY current word per language (changes every 0.4s)
     draw_bullets(draw, hindi, urdu, english, mt, voice_dur,
                  y_start=780, alpha=alpha)
 
-    # ----- Progress bar -----
     draw_progress(draw, mt, voice_dur)
 
-    # ----- Sparkles -----
     draw_sparkles(draw, mt)
