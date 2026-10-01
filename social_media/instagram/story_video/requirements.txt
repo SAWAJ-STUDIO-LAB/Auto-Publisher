@@ -1,6 +1,6 @@
 # ============================================================
 # FILE:      requirements.txt
-# PATH:      social_media/instagram/story_video/requirements.txt
+# PATH:      social_media/facebook/story_video/requirements.txt
 # PURPOSE:   Python dependencies
 # ============================================================
 
