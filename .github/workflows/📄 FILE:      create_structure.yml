@@ -1,0 +1,98 @@
+# ============================================================
+# 📄 FILE:      create_structure.yml
+# 📁 PATH:      .github/workflows/create_structure.yml
+# 🎯 PURPOSE:   Auto-create complete folder structure
+# ⚡ TRIGGER:   Manual
+# ============================================================
+
+name: "🏗️ Create Folder Structure"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+
+      - name: 🏗️ Create All Folders
+        run: |
+          set -e
+
+          BASE="sawajstudiobot/social_media"
+
+          # ═══════════ Shared ═══════════
+          mkdir -p "$BASE/shared/assets"
+          mkdir -p "$BASE/shared/fonts"
+          mkdir -p "$BASE/shared/configs"
+          mkdir -p "$BASE/shared/utils"
+
+          # ═══════════ Multimedia — Story ═══════════
+          for f in A_core B_graphics C_content D_video E_audio G_entry H_tests; do
+            mkdir -p "$BASE/multimedia/story_video/$f"
+          done
+          mkdir -p "$BASE/multimedia/story_video/output/temp"
+          mkdir -p "$BASE/multimedia/story_video/output/final"
+
+          # ═══════════ Multimedia — Short ═══════════
+          for f in A_core B_graphics C_content D_video E_audio G_entry H_tests; do
+            mkdir -p "$BASE/multimedia/short_video/$f"
+          done
+          mkdir -p "$BASE/multimedia/short_video/output/temp"
+          mkdir -p "$BASE/multimedia/short_video/output/final"
+
+          # ═══════════ Multimedia — Long ═══════════
+          for f in A_core B_graphics C_content D_video E_audio G_entry H_tests; do
+            mkdir -p "$BASE/multimedia/long_video/$f"
+          done
+          mkdir -p "$BASE/multimedia/long_video/output/temp"
+          mkdir -p "$BASE/multimedia/long_video/output/final"
+
+          # ═══════════ Uploaders ═══════════
+          mkdir -p "$BASE/uploaders/facebook"
+          mkdir -p "$BASE/uploaders/instagram"
+          mkdir -p "$BASE/uploaders/youtube"
+
+          # ═══════════ Package Markers ═══════════
+          touch "$BASE/__init__.py"
+          touch "$BASE/shared/__init__.py"
+          touch "$BASE/shared/configs/__init__.py"
+          touch "$BASE/shared/utils/__init__.py"
+          touch "$BASE/multimedia/__init__.py"
+          touch "$BASE/multimedia/story_video/__init__.py"
+          touch "$BASE/multimedia/short_video/__init__.py"
+          touch "$BASE/multimedia/long_video/__init__.py"
+          touch "$BASE/uploaders/__init__.py"
+          touch "$BASE/uploaders/facebook/__init__.py"
+          touch "$BASE/uploaders/instagram/__init__.py"
+          touch "$BASE/uploaders/youtube/__init__.py"
+
+          # Content-type subfolders __init__
+          for type in story_video short_video long_video; do
+            for f in A_core B_graphics C_content D_video E_audio G_entry H_tests; do
+              touch "$BASE/multimedia/$type/$f/__init__.py"
+            done
+          done
+
+          # ═══════════ .gitkeep ═══════════
+          for type in story_video short_video long_video; do
+            touch "$BASE/multimedia/$type/output/temp/.gitkeep"
+            touch "$BASE/multimedia/$type/output/final/.gitkeep"
+          done
+
+          echo "✅ Structure created!"
+
+      - name: 🚀 Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: create complete folder structure" || exit 0
+          git push
