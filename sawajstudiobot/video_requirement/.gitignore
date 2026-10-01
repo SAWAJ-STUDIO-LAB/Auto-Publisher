@@ -1,0 +1,23 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & secrets
+.env
+*.json
+!env.example
+
+# Media Outputs & Temp directories
+output/
+temp/
+*.mp4
+*.mp3
+*.wav
+*.png
+*.jpg
+*.srt
+
+# System files
+.DS_Store
+Thumbs.db
