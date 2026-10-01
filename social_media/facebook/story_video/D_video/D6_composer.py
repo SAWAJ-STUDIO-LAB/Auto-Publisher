@@ -1,20 +1,30 @@
 # ============================================================
-# FILE:      D6_composer.py
-# PATH:      social_media/facebook/story_video/D_video/D6_composer.py
-# PURPOSE:   Compose final video from frames + audio
+# 📄 FILE:      D6_composer.py
+# 📁 PATH:      social_media/facebook/story_video/D_video/D6_composer.py
+# 🎯 PURPOSE:   Compose final video from frames + audio
 # ============================================================
 
 import os
 from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
+# ─────────────────────────────────────────────────────────────
+# ① COMPOSER CLASS
+# ─────────────────────────────────────────────────────────────
 class Composer:
+    """Final video composer using FFmpeg."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("D6_composer.py", "Final video composition")
         self.base = base
         log_file_end("D6_composer.py", "success", "Ready")
 
+    # ─────────────────────────────────────────────────────────
+    # ③ COMPOSE — compose final video
+    # ─────────────────────────────────────────────────────────
     def compose(self, bg, frames_dir, voice, total,
                 outfile="output/final/Final_Story.mp4"):
         log_step("D6_composer.py", "compose() starting", "ok",
@@ -34,7 +44,4 @@ class Composer:
             f'-c:v libx264 -preset veryfast -crf 17 -b:v 7M '
             f'-c:a aac -b:a 192k -t {total:.2f} -movflags +faststart {outfile}')
 
-        size_mb = os.path.getsize(outfile) / 1024 / 1024
-        log_step("D6_composer.py", f"Video ready: {outfile}", "ok",
-                 f"{size_mb:.1f} MB")
-        return outfile
+        size_mb = os.path.getsize(outfile) /
