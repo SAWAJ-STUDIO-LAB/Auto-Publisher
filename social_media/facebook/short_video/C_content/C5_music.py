@@ -92,4 +92,6 @@ class Music:
             f'ffmpeg -y -f lavfi -i "sine=frequency=110:duration={MUSIC_DUR}" '
             f'-af "afade=t=in:st=0:d=2.5,afade=t=out:st={MUSIC_DUR-10}:d=6,volume=0.12" '
             f'{outfile}')
-        self.base.api_status["Music"]["Generated-Sine"] = "success (fall
+        self.base.api_status["Music"]["Generated-Sine"] = "success (fallback)"
+        log_api("C5_music.py", "Generated-Sine", "fallback")
+        return outfile
