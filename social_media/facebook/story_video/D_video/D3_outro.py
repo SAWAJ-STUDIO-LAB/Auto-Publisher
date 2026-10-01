@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      D3_outro.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D3_outro.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D3_outro.py
 # 🎯 PURPOSE:   Outro frames (JazakAllah + CTA buttons)
 # ⏱️  TIMING:   Outro = 2 seconds
 # ============================================================
