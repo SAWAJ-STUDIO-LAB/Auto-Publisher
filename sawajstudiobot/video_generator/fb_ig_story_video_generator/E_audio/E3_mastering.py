@@ -1,6 +1,6 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      E3_mastering.py                           ║
-# ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
+# ║  📁 PATH:      .../fb_ig_yt_short_video_generator/       ║
 # ║                E_audio/E3_mastering.py                   ║
 # ║  🎯 PURPOSE:   Audio mastering (normalize, tempo)        ║
 # ║  📖 FOLDER:    E_audio                                   ║
@@ -8,7 +8,7 @@
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎚️  MASTERING MODULE (STORY)                           ║
+║   🎚️  MASTERING MODULE (SHORT)                           ║
 ║   ═══════════════════════                                ║
 ║                                                          ║
 ║   📖 Settings:                                            ║
@@ -21,7 +21,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
 class Mastering:
-    """Master voice audio (Story: slower tempo 0.88)."""
+    """Master voice audio (Short: slower tempo 0.88)."""
 
     def __init__(self, base):
         log_file_start("E3_mastering.py", "Audio mastering")
