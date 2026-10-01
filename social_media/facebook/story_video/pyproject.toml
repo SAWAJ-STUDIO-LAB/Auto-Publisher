@@ -1,15 +1,21 @@
 # ============================================================
-# FILE:      pyproject.toml
-# PATH:      social_media/facebook/story_video/pyproject.toml
-# PURPOSE:   Project config + pytest settings
+# 📄 FILE:      pyproject.toml
+# 📁 PATH:      social_media/facebook/story_video/pyproject.toml
+# 🎯 PURPOSE:   Project configuration + pytest settings
 # ============================================================
 
+# ─────────────────────────────────────────────────────────────
+# ① PROJECT METADATA
+# ─────────────────────────────────────────────────────────────
 [project]
 name = "facebook-story-video"
 version = "1.0.0"
 description = "Automated Facebook Story Video Generator"
 requires-python = ">=3.11"
 
+# ─────────────────────────────────────────────────────────────
+# ② PYTEST CONFIGURATION
+# ─────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["H_tests"]
 python_files = "H*_test_*.py"
