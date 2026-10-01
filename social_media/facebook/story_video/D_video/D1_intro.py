@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      D1_intro.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D1_intro.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D1_intro.py
 # 🎯 PURPOSE:   Intro frames (Bismillah + Logo + Title)
 # ⏱️  TIMING:   Intro = 2 seconds
 # ============================================================
@@ -24,7 +24,7 @@ def draw_intro(img, draw, t, intro_dur, has_logo):
       - Gold line sweep
       - Logo scale-in
       - Title fade-in
-      - Subtitle
+      - "Islamic Shorts" subtitle
     """
     p = t / intro_dur
     alpha = min(1.0, t / 0.5)
@@ -69,7 +69,7 @@ def draw_intro(img, draw, t, intro_dur, has_logo):
         draw_centered(draw, "HADITH OF THE DAY", 980, font_title,
                       (*C_GOLD, int(255 * title_p)))
         if title_p > 0.5:
-            draw_centered(draw, "SAWAJ STUDIO Presents", 1080, font_sub,
+            draw_centered(draw, "Islamic Shorts", 1080, font_sub,
                           (180, 160, 130, int(200 * title_p)))
 
     # ───────── Sparkles ─────────
