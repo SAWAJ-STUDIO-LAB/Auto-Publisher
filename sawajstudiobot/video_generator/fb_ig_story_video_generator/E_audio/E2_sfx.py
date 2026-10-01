@@ -1,6 +1,6 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      E2_sfx.py                                 ║
-# ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
+# ║  📁 PATH:      .../fb_ig_yt_short_video_generator/       ║
 # ║                E_audio/E2_sfx.py                         ║
 # ║  🎯 PURPOSE:   Sound effects (whoosh, ding)              ║
 # ║  📖 FOLDER:    E_audio                                   ║
@@ -8,16 +8,11 @@
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🔊 SOUND EFFECTS MODULE (STORY)                        ║
+║   🔊 SOUND EFFECTS MODULE (SHORT)                        ║
 ║   ═══════════════════════                                ║
 ║                                                          ║
 ║   🎯 Purpose:                                            ║
 ║      FFmpeg sound effects commands generate karna        ║
-║                                                          ║
-║   📝 Note:                                                ║
-║      Yeh functions sirf command string return karti     ║
-║      hain — directly run nahi karti. Caller decide      ║
-║      karta hai kab run karna hai.                        ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
