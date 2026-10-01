@@ -1,9 +1,0 @@
-[project]
-name = "facebook-story-video"
-version = "1.0.0"
-description = "Facebook Story Video Generator"
-requires-python = ">=3.11"
-
-[tool.pytest.ini_options]
-testpaths = ["."]
-python_files = "test_*.py"
