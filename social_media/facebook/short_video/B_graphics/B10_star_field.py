@@ -1,14 +1,18 @@
 # ============================================================
-# FILE:      B10_star_field.py
-# PATH:      social_media/facebook/story_video/B_graphics/B10_star_field.py
-# PURPOSE:   Twinkling stars
+# 📄 FILE:      B10_star_field.py
+# 📁 PATH:      social_media/facebook/short_video/B_graphics/B10_star_field.py
+# 🎯 PURPOSE:   Twinkling stars background
 # ============================================================
 
 import math
 import random
 
 
+# ─────────────────────────────────────────────────────────────
+# ① DRAW STARS — twinkling stars background
+# ─────────────────────────────────────────────────────────────
 def draw_stars(draw, t, count=40):
+    """Draw twinkling stars (fixed seed for stability)."""
     rng = random.Random(42)
     for _ in range(count):
         x = rng.randint(0, 1080)
