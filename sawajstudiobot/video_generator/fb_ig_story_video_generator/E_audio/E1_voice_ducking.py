@@ -1,18 +1,15 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      E1_voice_ducking.py                       ║
-# ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
+# ║  📁 PATH:      .../fb_ig_yt_short_video_generator/       ║
 # ║                E_audio/E1_voice_ducking.py               ║
-# ║  🎯 PURPOSE:   Mix voice + music with ducking (STORY)    ║
+# ║  🎯 PURPOSE:   Mix voice + music with ducking (SHORT)    ║
 # ║  📖 FOLDER:    E_audio                                   ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎚️  VOICE DUCKING MODULE (STORY)                       ║
+║   🎚️  VOICE DUCKING MODULE (SHORT)                       ║
 ║   ═══════════════════════                                ║
-║                                                          ║
-║   🎯 Purpose:                                            ║
-║      Voice + music ko mix karna (music auto-duck)        ║
 ║                                                          ║
 ║   📖 Settings:                                            ║
 ║      • Voice: 100% | Music: 20%                          ║
@@ -25,7 +22,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
 class VoiceDucking:
-    """Mix voice over music with volume ducking (Story version)."""
+    """Mix voice over music with volume ducking (Short version)."""
 
     def __init__(self, base):
         log_file_start("E1_voice_ducking.py", "Voice + music mix")
