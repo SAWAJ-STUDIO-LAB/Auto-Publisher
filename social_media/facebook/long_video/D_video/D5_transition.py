@@ -1,10 +1,11 @@
 # ============================================================
-# FILE:      D5_transition.py
-# PATH:      social_media/facebook/story_video/D_video/D5_transition.py
-# PURPOSE:   Transition helpers
+# 📄 FILE:      D5_transition.py
+# 📁 PATH:      social_media/facebook/long_video/D_video/D5_transition.py
+# 🎯 PURPOSE:   Transition helpers (crossfade + easing)
 # ============================================================
 
 def crossfade_alpha(current_t, start, duration):
+    """Return alpha 0..1 for crossfade."""
     if current_t < start:
         return 0.0
     if current_t > start + duration:
@@ -13,4 +14,5 @@ def crossfade_alpha(current_t, start, duration):
 
 
 def ease_in_out(x):
+    """Smooth easing function (S-curve)."""
     return x * x * (3 - 2 * x)
