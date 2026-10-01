@@ -1,0 +1,26 @@
+# --- Core Image & Video Processing ---
+Pillow>=10.2.0
+moviepy>=1.0.3
+opencv-python-headless>=4.9.0
+
+# --- Audio & Speech Processing ---
+gTTS>=2.5.1
+edge-tts>=6.1.9
+pydub>=0.25.1
+
+# --- API & HTTP Requests ---
+requests>=2.31.0
+urllib3>=2.2.0
+
+# --- AI & Translation ---
+google-generativeai>=0.4.0
+groq>=0.4.2
+
+# --- Google Cloud & Drive API ---
+google-api-python-client>=2.118.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# --- Environment & Utils ---
+python-dotenv>=1.0.1
+pytz>=2024.1
