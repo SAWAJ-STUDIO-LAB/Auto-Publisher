@@ -1,4 +1,4 @@
-Name: Combine all-in-one Send
+name: Combine all-in-one Send
 
 on:
   push:
