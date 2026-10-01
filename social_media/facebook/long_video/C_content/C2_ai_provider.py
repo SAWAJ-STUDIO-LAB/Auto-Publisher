@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C2_ai_provider.py
-# PATH:      social_media/facebook/story_video/C_content/C2_ai_provider.py
-# PURPOSE:   Multi-provider AI with automatic fallback
+# 📄 FILE:      C2_ai_provider.py
+# 📁 PATH:      social_media/facebook/long_video/C_content/C2_ai_provider.py
+# 🎯 PURPOSE:   Multi-provider AI text generation with fallback
 # ============================================================
 
 import os
@@ -9,6 +9,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
 class AIProvider:
+    """Multi-provider AI with automatic fallback chain."""
 
     def __init__(self, base):
         log_file_start("C2_ai_provider.py", "AI text generation")
@@ -16,6 +17,7 @@ class AIProvider:
         log_file_end("C2_ai_provider.py", "success", "Ready")
 
     def call(self, prompt, max_tokens=400, task="general"):
+        """Try providers in order until one works."""
         log_step("C2_ai_provider.py", f"call(task={task})", "ok",
                  f"prompt {len(prompt)} chars")
 
