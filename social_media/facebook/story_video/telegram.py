@@ -1,4 +1,5 @@
 """Telegram notifier — detailed step-by-step logging."""
+import os
 import time
 import requests
 from datetime import datetime
@@ -14,8 +15,6 @@ def _now():
 
 
 def _creds():
-    """Lazy read config to avoid circular import."""
-    import os
     return os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
 
 
