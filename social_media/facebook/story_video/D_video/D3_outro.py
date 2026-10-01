@@ -1,7 +1,8 @@
 # ============================================================
-# FILE:      D3_outro.py
-# PATH:      social_media/facebook/story_video/D_video/D3_outro.py
-# PURPOSE:   Outro frames (JazakAllah + CTA)
+# 📄 FILE:      D3_outro.py
+# 📁 PATH:      social_media/facebook/story_video/D_video/D3_outro.py
+# 🎯 PURPOSE:   Outro frames (JazakAllah + CTA buttons)
+# ⏱️  TIMING:   Outro = 2 seconds
 # ============================================================
 
 import os
@@ -11,7 +12,19 @@ from B_graphics.B2_text_wrap import draw_centered
 from B_graphics.B3_sparkles import draw_sparkles
 
 
+# ─────────────────────────────────────────────────────────────
+# ① DRAW OUTRO — draw outro frame at time t
+# ─────────────────────────────────────────────────────────────
 def draw_outro(img, draw, t, outro_dur, has_logo):
+    """
+    Draw outro frame at time t (0 to outro_dur).
+    
+    Shows:
+      - JazakAllah text
+      - LIKE / SUBSCRIBE / SHARE buttons
+      - Follow handle
+      - Logo
+    """
     alpha = min(1.0, t / 0.5)
 
     font_outro = FontLoader.load(72, "latin", bold=True)
@@ -20,9 +33,11 @@ def draw_outro(img, draw, t, outro_dur, has_logo):
 
     C_GOLD = (230, 200, 130)
 
+    # ───────── JazakAllah ─────────
     draw_centered(draw, "JazakAllah Khair", 780, font_outro,
                   (*C_GOLD, int(255 * alpha)))
 
+    # ───────── CTA row ─────────
     if alpha > 0.4:
         cta_y = 960
         cta_items = [
@@ -35,10 +50,12 @@ def draw_outro(img, draw, t, outro_dur, has_logo):
                       fill=(255, 240, 200, int(255 * alpha)),
                       font=font_cta)
 
+    # ───────── Follow text ─────────
     if alpha > 0.6:
         draw_centered(draw, "Follow @sawajstudio", 1120, font_follow,
                       (220, 190, 130, int(255 * alpha)))
 
+    # ───────── Logo center ─────────
     if has_logo:
         try:
             logo = Image.open("avatar.png").convert("RGBA").resize(
@@ -47,4 +64,5 @@ def draw_outro(img, draw, t, outro_dur, has_logo):
         except Exception:
             pass
 
+    # ───────── Sparkles ─────────
     draw_sparkles(draw, t)
