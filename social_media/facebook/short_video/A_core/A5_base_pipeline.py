@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      A5_base_pipeline.py
-# PATH:      social_media/facebook/story_video/A_core/A5_base_pipeline.py
-# PURPOSE:   HTTP session + download + cleanup
+# 📄 FILE:      A5_base_pipeline.py
+# 📁 PATH:      social_media/facebook/short_video/A_core/A5_base_pipeline.py
+# 🎯 PURPOSE:   HTTP session + download + cleanup helpers
 # ============================================================
 
 import os
@@ -17,6 +17,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step, log_error
 
 
 class BasePipeline:
+    """Base class — shared helpers."""
 
     def __init__(self):
         log_file_start("A5_base_pipeline.py", "Setup session")
@@ -29,7 +30,7 @@ class BasePipeline:
         self.api_status = {
             "AI": {}, "TTS": {}, "Music": {}, "Background": {},
             "Translation": {}, "Hadith": {}, "Drive": {},
-            "Facebook Story": {},
+            "Facebook": {},
         }
         log_file_end("A5_base_pipeline.py", "success", "Session ready")
 
