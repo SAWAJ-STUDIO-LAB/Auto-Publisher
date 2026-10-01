@@ -1,28 +1,24 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      __init__.py                               ║
 # ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
-# ║                H_tests/__init__.py                       ║
-# ║  🎯 PURPOSE:   Test modules package                      ║
-# ║  📖 FOLDER:    H_tests                                   ║
+# ║                G_entry/__init__.py                       ║
+# ║  🎯 PURPOSE:   Entry point modules package               ║
+# ║  📖 FOLDER:    G_entry                                   ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🧪 TEST MODULES                                        ║
+║   🚪 ENTRY MODULES                                       ║
 ║   ═══════════════════                                    ║
 ║                                                          ║
 ║   📦 Files:                                              ║
-║      • H1_conftest.py     → Pytest path setup            ║
-║      • H2_test_story.py   → Config + Utils tests         ║
-║      • H3_test_media.py   → Media import tests           ║
-║      • H4_test_render.py  → Render import tests          ║
+║      • G1_story_pipeline.py → Orchestrate all steps      ║
+║      • G2_run.py            → Main entry point           ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
 
 __all__ = [
-    "H1_conftest",
-    "H2_test_story",
-    "H3_test_media",
-    "H4_test_render",
+    "G1_story_pipeline",
+    "G2_run",
 ]
