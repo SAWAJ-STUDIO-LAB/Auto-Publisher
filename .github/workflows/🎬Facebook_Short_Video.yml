@@ -1,0 +1,110 @@
+name: "🎬Facebook_Short_Video"
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_social:
+        description: 'Upload to Facebook?'
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: '30 1 * * *'
+    - cron: '30 6 * * *'
+    - cron: '30 11 * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: facebook-short
+  cancel-in-progress: false
+
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN_GITHUB }}
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Cache Python Packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-tools
+
+      - name: 🔤 Cache Custom Fonts
+        id: cache-fonts
+        uses: actions/cache@v4
+        with:
+          path: ~/.fonts
+          key: ${{ runner.os }}-custom-fonts
+
+      - name: 🛠️ Install FFmpeg & Fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
+
+      - name: ⬇️ Download Custom Fonts
+        if: steps.cache-fonts.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.fonts
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf" -O ~/.fonts/NotoSans-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O ~/.fonts/NotoSansDevanagari-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf" -O ~/.fonts/NotoNaskhArabic-Regular.ttf || true
+          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf" -O ~/.fonts/NotoNaskhArabic-Bold.ttf || true
+
+      - name: 📚 Install Python Packages
+        run: |
+          fc-cache -f -v
+          pip install --no-cache-dir requests edge-tts mutagen Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: 🎬 Run Facebook Short
+        working-directory: social_media/facebook/short_video
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_SHORT_VIDEO_FOLDER_ID }}
+          FACEBOOK_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_AI }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_AI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_AI }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY_AI }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY_AI }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY_AI }}
+          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY_AI }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
+          HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          UPLOAD_TO_SOCIAL: ${{ inputs.upload_to_social || github.event.inputs.upload_to_social }}
+        run: python3 G_entry/G2_run_short.py
+
+      - name: 📤 Upload Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: facebook-short
+          path: social_media/facebook/short_video/output/final/Final_Short_Video.mp4
+          retention-days: 5
+          if-no-files-found: ignore
