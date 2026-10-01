@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      B1_fonts.py
-# PATH:      social_media/facebook/story_video/B_graphics/B1_fonts.py
-# PURPOSE:   Font loader
+# 📄 FILE:      B1_fonts.py
+# 📁 PATH:      social_media/facebook/short_video/B_graphics/B1_fonts.py
+# 🎯 PURPOSE:   Font loader (Devanagari / Arabic / Latin)
 # ============================================================
 
 import os
@@ -9,6 +9,7 @@ from PIL import ImageFont
 
 
 class FontLoader:
+    """Load fonts from ~/.fonts/ with fallback."""
 
     @staticmethod
     def load(size, script="latin", bold=True):
