@@ -1,8 +1,8 @@
 # ============================================================
 # FILE:      generate_structure.yml
 # PATH:      .github/workflows/generate_structure.yml
-# PURPOSE:   Delete old structure + rebuild new 63-file layout
-# USAGE:     Manual trigger from GitHub Actions tab
+# PURPOSE:   Delete old + rebuild new 63-file structure
+# USAGE:     Manual run — just tick the checkbox
 # ============================================================
 
 name: "🛠️ Generate Folder Structure"
@@ -10,11 +10,11 @@ name: "🛠️ Generate Folder Structure"
 on:
   workflow_dispatch:
     inputs:
-      confirm_delete:
-        description: 'Type DELETE to confirm wiping old structure'
+      wipe_old:
+        description: 'Wipe old structure and rebuild?'
         required: true
-        type: string
-        default: ''
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ jobs:
 
     steps:
       # --------------------------------------------------------
-      # STEP 1: Checkout Repository
+      # STEP 1: Checkout
       # --------------------------------------------------------
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
@@ -33,20 +33,10 @@ jobs:
           token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------------
-      # STEP 2: Confirm Delete
+      # STEP 2: Wipe Old Structure
       # --------------------------------------------------------
-      - name: ⚠️ Confirm Deletion
-        run: |
-          if [ "${{ inputs.confirm_delete }}" != "DELETE" ]; then
-            echo "❌ Confirmation failed. Please type DELETE in the input."
-            exit 1
-          fi
-          echo "✅ Confirmed. Proceeding to wipe old structure."
-
-      # --------------------------------------------------------
-      # STEP 3: Delete Old Structure (Safe)
-      # --------------------------------------------------------
-      - name: 🗑️ Delete Old Structure
+      - name: 🗑️ Wipe Old Structure
+        if: ${{ inputs.wipe_old == true }}
         run: |
           echo "→ Deleting social_media/"
           rm -rf social_media/ || true
@@ -56,21 +46,16 @@ jobs:
             ! -name "generate_structure.yml" \
             -delete || true
 
-          echo "→ Deleting root-level old files (if any)"
-          rm -f social_media 2>/dev/null || true
-
           echo "✅ Old structure wiped."
 
       # --------------------------------------------------------
-      # STEP 4: Create New Structure
+      # STEP 3: Create New Structure
       # --------------------------------------------------------
       - name: 🏗️ Create New Folder Structure
         run: |
           set -e
 
-          # ====================================================
-          # ROOT PACKAGE MARKERS
-          # ====================================================
+          # ========== ROOT MARKERS ==========
           mkdir -p social_media/facebook/story_video
           touch social_media/__init__.py
           touch social_media/facebook/__init__.py
@@ -78,20 +63,15 @@ jobs:
 
           BASE="social_media/facebook/story_video"
 
-          # ====================================================
-          # ROOT-LEVEL FILES
-          # ====================================================
+          # ========== ROOT FILES ==========
           touch "$BASE/requirements.txt"
           touch "$BASE/env.example"
           touch "$BASE/.gitignore"
           touch "$BASE/README.md"
           touch "$BASE/Makefile"
           touch "$BASE/pyproject.toml"
-          # NOTE: logo.png is NOT touched — user uploads it manually
 
-          # ====================================================
-          # A_core/
-          # ====================================================
+          # ========== A_core ==========
           mkdir -p "$BASE/A_core"
           touch "$BASE/A_core/__init__.py"
           touch "$BASE/A_core/A1_config.py"
@@ -100,9 +80,7 @@ jobs:
           touch "$BASE/A_core/A4_utils.py"
           touch "$BASE/A_core/A5_base_pipeline.py"
 
-          # ====================================================
-          # B_graphics/
-          # ====================================================
+          # ========== B_graphics ==========
           mkdir -p "$BASE/B_graphics"
           touch "$BASE/B_graphics/__init__.py"
           touch "$BASE/B_graphics/B1_fonts.py"
@@ -118,9 +96,7 @@ jobs:
           touch "$BASE/B_graphics/B11_ember.py"
           touch "$BASE/B_graphics/B12_vignette.py"
 
-          # ====================================================
-          # C_content/
-          # ====================================================
+          # ========== C_content ==========
           mkdir -p "$BASE/C_content"
           touch "$BASE/C_content/__init__.py"
           touch "$BASE/C_content/C1_hadith.py"
@@ -132,9 +108,7 @@ jobs:
           touch "$BASE/C_content/C7_logo_processor.py"
           touch "$BASE/C_content/C8_thumbnail.py"
 
-          # ====================================================
-          # D_video/
-          # ====================================================
+          # ========== D_video ==========
           mkdir -p "$BASE/D_video"
           touch "$BASE/D_video/__init__.py"
           touch "$BASE/D_video/D1_intro.py"
@@ -144,34 +118,26 @@ jobs:
           touch "$BASE/D_video/D5_transition.py"
           touch "$BASE/D_video/D6_composer.py"
 
-          # ====================================================
-          # E_audio/
-          # ====================================================
+          # ========== E_audio ==========
           mkdir -p "$BASE/E_audio"
           touch "$BASE/E_audio/__init__.py"
           touch "$BASE/E_audio/E1_voice_ducking.py"
           touch "$BASE/E_audio/E2_sfx.py"
           touch "$BASE/E_audio/E3_mastering.py"
 
-          # ====================================================
-          # F_upload/
-          # ====================================================
+          # ========== F_upload ==========
           mkdir -p "$BASE/F_upload"
           touch "$BASE/F_upload/__init__.py"
           touch "$BASE/F_upload/F1_drive.py"
           touch "$BASE/F_upload/F2_upload_story.py"
 
-          # ====================================================
-          # G_entry/
-          # ====================================================
+          # ========== G_entry ==========
           mkdir -p "$BASE/G_entry"
           touch "$BASE/G_entry/__init__.py"
           touch "$BASE/G_entry/G1_story_pipeline.py"
           touch "$BASE/G_entry/G2_run_story.py"
 
-          # ====================================================
-          # H_tests/
-          # ====================================================
+          # ========== H_tests ==========
           mkdir -p "$BASE/H_tests"
           touch "$BASE/H_tests/__init__.py"
           touch "$BASE/H_tests/H1_conftest.py"
@@ -179,23 +145,19 @@ jobs:
           touch "$BASE/H_tests/H3_test_media.py"
           touch "$BASE/H_tests/H4_test_render.py"
 
-          # ====================================================
-          # OUTPUT FOLDERS
-          # ====================================================
+          # ========== OUTPUT ==========
           mkdir -p "$BASE/output/temp" "$BASE/output/final"
           touch "$BASE/output/temp/.gitkeep"
           touch "$BASE/output/final/.gitkeep"
 
-          # ====================================================
-          # GITHUB WORKFLOWS
-          # ====================================================
+          # ========== WORKFLOWS ==========
           mkdir -p .github/workflows
           touch .github/workflows/facebook_story.yml
 
           echo "✅ New structure created."
 
       # --------------------------------------------------------
-      # STEP 5: Show Tree (Verify)
+      # STEP 4: Show Tree
       # --------------------------------------------------------
       - name: 🌳 Show New Structure
         run: |
@@ -203,14 +165,15 @@ jobs:
           echo "📁 NEW FOLDER STRUCTURE"
           echo "============================================"
           find social_media .github -type f | sort
+          echo "============================================"
 
       # --------------------------------------------------------
-      # STEP 6: Commit & Push
+      # STEP 5: Commit & Push
       # --------------------------------------------------------
-      - name: 🚀 Commit and Push Changes
+      - name: 🚀 Commit and Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore: wipe old + rebuild 63-file structure (A→H)" || exit 0
+          git commit -m "chore: rebuild folder structure (A→H, 63 files)" || exit 0
           git push
