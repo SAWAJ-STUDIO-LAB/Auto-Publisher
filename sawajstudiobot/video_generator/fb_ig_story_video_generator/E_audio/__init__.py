@@ -1,14 +1,14 @@
 # ╔══════════════════════════════════════════════════════════╗
 # ║  📄 FILE:      __init__.py                               ║
-# ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
+# ║  📁 PATH:      .../fb_ig_yt_short_video_generator/       ║
 # ║                E_audio/__init__.py                       ║
-# ║  🎯 PURPOSE:   Audio modules package (STORY)             ║
+# ║  🎯 PURPOSE:   Audio modules package (SHORT)             ║
 # ║  📖 FOLDER:    E_audio                                   ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎵 AUDIO MODULES (STORY)                               ║
+║   🎵 AUDIO MODULES (SHORT)                               ║
 ║   ═══════════════════                                    ║
 ║                                                          ║
 ║   📦 Files:                                              ║
