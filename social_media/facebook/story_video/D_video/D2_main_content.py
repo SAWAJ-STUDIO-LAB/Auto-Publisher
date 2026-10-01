@@ -1,6 +1,6 @@
-# ============================================================
+l# ============================================================
 # 📄 FILE:      D2_main_content.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D2_main_content.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D2_main_content.py
 # 🎯 PURPOSE:   Main content (3-language word-by-word display)
 # ============================================================
 
