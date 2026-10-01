@@ -1,30 +1,25 @@
 # ============================================================
 # 📄 FILE:      F2_upload_short.py
 # 📁 PATH:      social_media/facebook/short_video/F_upload/F2_upload_short.py
-# 🎯 PURPOSE:   Upload Short video to Facebook Page
-# ⚠️  NOTE:     Uses System User Token → fetches Page Token → uploads
+# 🎯 PURPOSE:   Upload Short video to Facebook Page (with error handling)
+# ⚠️  NOTE:     Handles large files + JSON parse errors
 # ============================================================
 
 import os
+import time
 from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
-# ─────────────────────────────────────────────────────────────
-# ① SHORT UPLOADER CLASS
-# ─────────────────────────────────────────────────────────────
 class ShortUploader:
     """Upload video to Facebook Page (as video post)."""
 
-    # ─────────────────────────────────────────────────────────
-    # ② INIT
-    # ─────────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("F2_upload_short.py", "Facebook Short upload")
         self.base = base
         log_file_end("F2_upload_short.py", "success", "Ready")
 
     # ─────────────────────────────────────────────────────────
-    # ③ GET PAGE TOKEN — fetch page access token from system token
+    # ① GET PAGE TOKEN
     # ─────────────────────────────────────────────────────────
     def _get_page_token(self, system_token, page_id):
         """Fetch Page Access Token using System User Token."""
@@ -60,7 +55,19 @@ class ShortUploader:
             return None
 
     # ─────────────────────────────────────────────────────────
-    # ④ UPLOAD — upload to Facebook Page
+    # ② SAFE JSON PARSER
+    # ─────────────────────────────────────────────────────────
+    def _safe_json(self, response):
+        """Parse JSON safely — handle non-JSON responses."""
+        try:
+            return response.json()
+        except Exception:
+            # Non-JSON response — show raw text
+            text = response.text[:300] if response.text else "(empty)"
+            return {"_raw": text, "_status": response.status_code}
+
+    # ─────────────────────────────────────────────────────────
+    # ③ UPLOAD
     # ─────────────────────────────────────────────────────────
     def upload(self, video_path, caption=""):
         log_step("F2_upload_short.py", f"upload({video_path})", "ok")
@@ -77,7 +84,7 @@ class ShortUploader:
             log_step("F2_upload_short.py", "Page ID missing", "fail")
             return False
 
-        # ───────── Get Page Token (System Token se) ─────────
+        # ───────── Get Page Token ─────────
         log_step("F2_upload_short.py",
                  "Fetching Page Token from System User Token", "info")
 
@@ -85,46 +92,70 @@ class ShortUploader:
 
         if not page_token:
             log_step("F2_upload_short.py",
-                     "Page token fetch failed — using system token as fallback",
-                     "warn")
-            page_token = system_token  # Fallback
+                     "Page token fetch failed — using system token", "warn")
+            page_token = system_token
 
-        # ───────── Upload video with Page Token ─────────
+        # ───────── Upload video ─────────
         try:
             f_size = os.path.getsize(video_path)
             log_step("F2_upload_short.py",
                      f"Uploading {f_size // 1024} KB with Page Token", "info")
 
+            # ═══════════════ Upload with long timeout ═══════════════
             with open(video_path, "rb") as f:
-                res = self.base.session.post(
+                response = self.base.session.post(
                     f"https://graph.facebook.com/v21.0/{page_id}/videos",
                     data={
                         "access_token": page_token,
                         "description": caption,
                         "published": "true",
                     },
-                    files={"source": f}, timeout=600).json()
+                    files={"source": f},
+                    timeout=1800)  # 30 minutes for large files
 
-            # ───────── Check response ─────────
+            # ═══════════════ Parse response (safe) ═══════════════
+            log_step("F2_upload_short.py",
+                     f"Response HTTP {response.status_code}", "info")
+
+            res = self._safe_json(response)
+
+            # ═══════════════ Check for raw/non-JSON ═══════════════
+            if "_raw" in res:
+                log_api("F2_upload_short.py", "FB-Short", "failed",
+                        f"Non-JSON response (HTTP {res['_status']}): {res['_raw'][:100]}")
+                self.base.api_status["Facebook"]["Upload"] = \
+                    f"failed (HTTP {res['_status']})"
+                return False
+
+            # ═══════════════ Success ═══════════════
             if res.get("id"):
                 self.base.api_status["Facebook"]["Upload"] = "success"
                 log_api("F2_upload_short.py", "FB-Short", "success", res["id"])
                 return True
 
-            # ───────── Log error ─────────
-            err = res.get("error", {})
-            err_msg = err.get("message", "Unknown error")
-            err_code = err.get("code", "?")
-            err_subcode = err.get("error_subcode", "")
+            # ═══════════════ Error response ═══════════════
+            if res.get("error"):
+                err = res["error"]
+                err_msg = err.get("message", "Unknown error")
+                err_code = err.get("code", "?")
+                err_subcode = err.get("error_subcode", "")
+                err_trace = err.get("error_data", {}).get("blame_field_specs", "")
 
+                log_api("F2_upload_short.py", "FB-Short", "failed",
+                        f"Code {err_code}/{err_subcode}: {err_msg[:80]}")
+
+                self.base.api_status["Facebook"]["Upload"] = \
+                    f"failed (Code {err_code})"
+                return False
+
+            # ═══════════════ Unknown response ═══════════════
             log_api("F2_upload_short.py", "FB-Short", "failed",
-                    f"Code {err_code}/{err_subcode}: {err_msg[:80]}")
-
-            self.base.api_status["Facebook"]["Upload"] = \
-                f"failed (Code {err_code})"
+                    f"Unknown response: {str(res)[:100]}")
+            self.base.api_status["Facebook"]["Upload"] = "failed (unknown)"
             return False
 
         except Exception as e:
+            err_str = str(e)[:150]
             self.base.api_status["Facebook"]["Upload"] = f"failed ({str(e)[:40]})"
-            log_api("F2_upload_short.py", "FB-Short", "failed", str(e)[:100])
+            log_api("F2_upload_short.py", "FB-Short", "failed", err_str)
             return False
