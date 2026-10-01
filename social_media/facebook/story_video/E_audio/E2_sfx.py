@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      E2_sfx.py
-# 📁 PATH:      social_media/facebook/story_video/E_audio/E2_sfx.py
+# 📁 PATH:      social_media/facebook/short_video/E_audio/E2_sfx.py
 # 🎯 PURPOSE:   Sound effects (whoosh, ding) — FFmpeg commands
 # ============================================================
 
