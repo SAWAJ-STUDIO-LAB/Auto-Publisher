@@ -1,6 +1,6 @@
-# 📸 Instagram Story Video
+# 📘 Facebook Story Video
 
-Automated daily Instagram Story video generation.
+Automated daily Facebook Story video generation.
 
 ## Features
 - Hadith fetch (multi-API)
@@ -8,12 +8,12 @@ Automated daily Instagram Story video generation.
 - Voice (ElevenLabs + edge-tts)
 - Music (Freesound + Pixabay)
 - Background (Pexels + Pixabay)
-- 3-Language word-by-word bullets
+- 3-Language bullets (Hindi + Arabic + English)
 - Intro (Bismillah + Logo + Gold line)
 - Outro (JazakAllah + CTA)
 - Sparkles + Progress bar
 - Google Drive backup
-- Instagram Story upload
+- Facebook Story upload
 - Combined Telegram report
 
 ## Run Locally

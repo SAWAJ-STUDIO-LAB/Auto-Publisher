@@ -1,13 +1,13 @@
 # ============================================================
 # FILE:      pyproject.toml
-# PATH:      social_media/instagram/story_video/pyproject.toml
-# PURPOSE:   Project config
+# PATH:      social_media/facebook/story_video/pyproject.toml
+# PURPOSE:   Project config + pytest settings
 # ============================================================
 
 [project]
-name = "instagram-story-video"
+name = "facebook-story-video"
 version = "1.0.0"
-description = "Automated Instagram Story Video Generator"
+description = "Automated Facebook Story Video Generator"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
