@@ -1,12 +1,16 @@
 # ============================================================
-# FILE:      H1_conftest.py
-# PATH:      social_media/facebook/story_video/H_tests/H1_conftest.py
-# PURPOSE:   Pytest path setup
+# 📄 FILE:      H1_conftest.py
+# 📁 PATH:      social_media/facebook/story_video/H_tests/H1_conftest.py
+# 🎯 PURPOSE:   Pytest path setup
 # ============================================================
 
 import os
 import sys
 
+
+# ─────────────────────────────────────────────────────────────
+# ① PATH SETUP
+# ─────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _ROOT)
