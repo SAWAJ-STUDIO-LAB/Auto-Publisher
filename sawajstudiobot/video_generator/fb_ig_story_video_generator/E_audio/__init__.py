@@ -2,13 +2,13 @@
 # ║  📄 FILE:      __init__.py                               ║
 # ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
 # ║                E_audio/__init__.py                       ║
-# ║  🎯 PURPOSE:   Audio enhancement modules package         ║
+# ║  🎯 PURPOSE:   Audio modules package (STORY)             ║
 # ║  📖 FOLDER:    E_audio                                   ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎵 AUDIO MODULES                                       ║
+║   🎵 AUDIO MODULES (STORY)                               ║
 ║   ═══════════════════                                    ║
 ║                                                          ║
 ║   📦 Files:                                              ║
