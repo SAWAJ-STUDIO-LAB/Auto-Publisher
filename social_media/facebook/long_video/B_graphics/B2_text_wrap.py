@@ -1,10 +1,14 @@
 # ============================================================
-# FILE:      B2_text_wrap.py
-# PATH:      social_media/facebook/story_video/B_graphics/B2_text_wrap.py
-# PURPOSE:   Text wrap + center align
+# 📄 FILE:      B2_text_wrap.py
+# 📁 PATH:      social_media/facebook/long_video/B_graphics/B2_text_wrap.py
+# 🎯 PURPOSE:   Text wrap + center align helpers
 # ============================================================
 
+from PIL import ImageDraw, ImageFont
+
+
 def wrap_text(draw, text, font, max_width=950):
+    """Wrap text into lines."""
     if not text:
         return []
     words = text.split()
@@ -25,6 +29,7 @@ def wrap_text(draw, text, font, max_width=950):
 
 
 def draw_centered(draw, text, y, font, fill, shadow=True):
+    """Draw text centered."""
     if not text:
         return
     bbox = draw.textbbox((0, 0), text, font=font)
@@ -32,4 +37,13 @@ def draw_centered(draw, text, y, font, fill, shadow=True):
     x = (1080 - w) // 2
     if shadow:
         draw.text((x + 4, y + 4), text, fill=(0, 0, 0, 220), font=font)
+    draw.text((x, y), text, fill=fill, font=font)
+
+
+def draw_left(draw, text, x, y, font, fill, shadow=True):
+    """Draw text left-aligned."""
+    if not text:
+        return
+    if shadow:
+        draw.text((x + 3, y + 3), text, fill=(0, 0, 0, 220), font=font)
     draw.text((x, y), text, fill=fill, font=font)
