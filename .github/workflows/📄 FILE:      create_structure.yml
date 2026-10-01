@@ -1,392 +1,163 @@
-# ============================================================
-# 📄 FILE:      create_structure.yml
-# 📁 PATH:      .github/workflows/create_structure.yml
-# 🎯 PURPOSE:   Auto-create complete folder structure
-# ⚡ TRIGGER:   Manual (workflow_dispatch)
-# ============================================================
-
-name: "🏗️ Create Complete Folder Structure"
+name: "🏗️ Build SawajStudioBot Structure"
 
 on:
   workflow_dispatch:
-    inputs:
-      wipe_old:
-        description: 'Delete existing sawajstudiobot folder first?'
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 jobs:
-  create:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
-      # ───────── Step 1: Checkout ─────────
-      - name: 📥 Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
 
-      # ───────── Step 2: Wipe Old (Optional) ─────────
-      - name: 🗑️ Delete Old sawajstudiobot
-        if: ${{ inputs.wipe_old == true }}
-        run: |
-          echo "→ Deleting old sawajstudiobot/"
-          rm -rf sawajstudiobot/ || true
-          echo "✅ Old structure wiped"
-
-      # ───────── Step 3: Create Root ─────────
-      - name: 🏗️ Create Root Folders
+      # ====================================================
+      # STEP 1: CREATE WORKFLOWS & MAIN FOLDER STRUCTURE
+      # ====================================================
+      - name: Build Directory Structure
         run: |
           set -e
 
+          # 1. Workflows Directory
           mkdir -p .github/workflows
-          mkdir -p sawajstudiobot
+          touch .github/workflows/story_video_fb_ig.yml
+          touch .github/workflows/short_video_fb_ig_yt.yml
+          touch .github/workflows/long_video_fb_yt.yml
 
+          # 2. Main Module
+          mkdir -p sawajstudiobot
           touch sawajstudiobot/__init__.py
 
-          echo "✅ Root folders created"
+          # 3. video_requirement & assets
+          mkdir -p sawajstudiobot/video_requirement/assets
+          touch sawajstudiobot/video_requirement/__init__.py
+          touch sawajstudiobot/video_requirement/requirements.txt
+          touch sawajstudiobot/video_requirement/env.example
+          touch sawajstudiobot/video_requirement/.gitignore
+          touch sawajstudiobot/video_requirement/README.md
+          touch sawajstudiobot/video_requirement/Makefile
+          touch sawajstudiobot/video_requirement/pyproject.toml
+          touch sawajstudiobot/video_requirement/assets/.gitkeep
 
-      # ───────── Step 4: Create video_requirement ─────────
-      - name: 📁 Create video_requirement
+          # Root images auto-copy to assets
+          for img in logo.png watermark.png intro.png *.png *.jpg *.jpeg; do
+            if [ -f "$img" ]; then
+              cp "$img" sawajstudiobot/video_requirement/ 2>/dev/null || true
+              cp "$img" sawajstudiobot/video_requirement/assets/ 2>/dev/null || true
+            fi
+          done
+
+          # 4. video_uploader Structure
+          mkdir -p sawajstudiobot/video_uploader/facebook
+          mkdir -p sawajstudiobot/video_uploader/instagram
+          mkdir -p sawajstudiobot/video_uploader/youtube
+
+          touch sawajstudiobot/video_uploader/__init__.py
+          touch sawajstudiobot/video_uploader/facebook/__init__.py
+          touch sawajstudiobot/video_uploader/facebook/story_uploader.py
+          touch sawajstudiobot/video_uploader/facebook/short_uploader.py
+          touch sawajstudiobot/video_uploader/facebook/long_uploader.py
+
+          touch sawajstudiobot/video_uploader/instagram/__init__.py
+          touch sawajstudiobot/video_uploader/instagram/story_uploader.py
+          touch sawajstudiobot/video_uploader/instagram/short_uploader.py
+
+          touch sawajstudiobot/video_uploader/youtube/__init__.py
+          touch sawajstudiobot/video_uploader/youtube/short_uploader.py
+          touch sawajstudiobot/video_uploader/youtube/long_uploader.py
+
+          # 5. video_generator Base
+          mkdir -p sawajstudiobot/video_generator
+          touch sawajstudiobot/video_generator/__init__.py
+
+          # Function to build generator subfolders
+          build_generator() {
+            BASE="sawajstudiobot/video_generator/$1"
+            TYPE="$2"
+
+            mkdir -p "$BASE/A_core" "$BASE/B_graphics" "$BASE/C_content"
+            mkdir -p "$BASE/D_video" "$BASE/E_audio" "$BASE/F_drive"
+            mkdir -p "$BASE/G_entry" "$BASE/H_tests"
+            mkdir -p "$BASE/output/temp" "$BASE/output/final"
+
+            touch "$BASE/__init__.py"
+            touch "$BASE/A_core/__init__.py"
+            for f in A1_config A2_logger A3_telegram A4_utils A5_base_pipeline; do
+              touch "$BASE/A_core/$f.py"; done
+
+            touch "$BASE/B_graphics/__init__.py"
+            for f in B1_fonts B2_text_wrap B3_sparkles B4_progress_bar B5_badge B6_bullets B7_watermark B8_arabesque B9_god_rays B10_star_field B11_ember B12_vignette; do
+              touch "$BASE/B_graphics/$f.py"; done
+
+            touch "$BASE/C_content/__init__.py"
+            for f in C1_hadith C2_ai_provider C3_translator C4_tts C5_music C6_background C7_logo_processor C8_thumbnail; do
+              touch "$BASE/C_content/$f.py"; done
+
+            touch "$BASE/D_video/__init__.py"
+            for f in D1_intro D2_main_content D3_outro D4_frames D5_transition D6_composer; do
+              touch "$BASE/D_video/$f.py"; done
+
+            touch "$BASE/E_audio/__init__.py"
+            for f in E1_voice_ducking E2_sfx E3_mastering; do
+              touch "$BASE/E_audio/$f.py"; done
+
+            touch "$BASE/F_drive/__init__.py"
+            touch "$BASE/F_drive/F1_drive.py"
+
+            touch "$BASE/G_entry/__init__.py"
+            touch "$BASE/G_entry/G1_${TYPE}_pipeline.py"
+            touch "$BASE/G_entry/G2_run.py"
+
+            touch "$BASE/H_tests/__init__.py"
+            touch "$BASE/H_tests/H1_conftest.py"
+            touch "$BASE/H_tests/H2_test_${TYPE}.py"
+            touch "$BASE/H_tests/H3_test_media.py"
+            touch "$BASE/H_tests/H4_test_render.py"
+
+            touch "$BASE/output/temp/.gitkeep"
+            touch "$BASE/output/final/.gitkeep"
+          }
+
+          build_generator "fb_ig_story_video_generator" "story"
+          build_generator "fb_ig_yt_short_video_generator" "short"
+          build_generator "fb_yt_long_video_generator" "long"
+
+          echo "Complete sawajstudiobot structure created."
+
+      # ====================================================
+      # STEP 2: COPY EXISTING SOURCE FILES IF AVAILABLE
+      # ====================================================
+      - name: Copy Existing Code
         run: |
           set -e
+          OLD_SRC="social_media/facebook/story_video"
+          GEN_BASE="sawajstudiobot/video_generator"
 
-          BASE="sawajstudiobot/video_requirement"
+          if [ -d "$OLD_SRC" ]; then
+            for DEST in "fb_ig_story_video_generator" "fb_ig_yt_short_video_generator" "fb_yt_long_video_generator"; do
+              cp -r "$OLD_SRC/A_core/." "$GEN_BASE/$DEST/A_core/" 2>/dev/null || true
+              cp -r "$OLD_SRC/B_graphics/." "$GEN_BASE/$DEST/B_graphics/" 2>/dev/null || true
+              cp -r "$OLD_SRC/C_content/." "$GEN_BASE/$DEST/C_content/" 2>/dev/null || true
+              cp -r "$OLD_SRC/D_video/." "$GEN_BASE/$DEST/D_video/" 2>/dev/null || true
+              cp -r "$OLD_SRC/E_audio/." "$GEN_BASE/$DEST/E_audio/" 2>/dev/null || true
+              cp -r "$OLD_SRC/F_upload/F1_drive.py" "$GEN_BASE/$DEST/F_drive/F1_drive.py" 2>/dev/null || true
+            done
+          fi
 
-          mkdir -p "$BASE/assets"
-
-          touch "$BASE/__init__.py"
-          touch "$BASE/requirements.txt"
-          touch "$BASE/env.example"
-          touch "$BASE/.gitignore"
-          touch "$BASE/README.md"
-          touch "$BASE/Makefile"
-          touch "$BASE/pyproject.toml"
-          # logo.png manually upload karo
-          touch "$BASE/assets/.gitkeep"
-
-          echo "✅ video_requirement created"
-
-      # ───────── Step 5: Create video_uploader ─────────
-      - name: 📁 Create video_uploader
+      # ====================================================
+      # STEP 3: COMMIT AND PUSH TO REPOSITORY
+      # ====================================================
+      - name: Commit and Push Changes
         run: |
-          set -e
-
-          BASE="sawajstudiobot/video_uploader"
-
-          touch "$BASE/__init__.py"
-
-          # ───── Facebook ─────
-          mkdir -p "$BASE/facebook"
-          touch "$BASE/facebook/__init__.py"
-          touch "$BASE/facebook/story_uploader.py"
-          touch "$BASE/facebook/short_uploader.py"
-          touch "$BASE/facebook/long_uploader.py"
-
-          # ───── Instagram ─────
-          mkdir -p "$BASE/instagram"
-          touch "$BASE/instagram/__init__.py"
-          touch "$BASE/instagram/story_uploader.py"
-          touch "$BASE/instagram/short_uploader.py"
-
-          # ───── YouTube ─────
-          mkdir -p "$BASE/youtube"
-          touch "$BASE/youtube/__init__.py"
-          touch "$BASE/youtube/short_uploader.py"
-          touch "$BASE/youtube/long_uploader.py"
-
-          echo "✅ video_uploader created"
-
-      # ───────── Step 6: Create video_generator (Root) ─────────
-      - name: 📁 Create video_generator Root
-        run: |
-          set -e
-
-          BASE="sawajstudiobot/video_generator"
-
-          mkdir -p "$BASE"
-          touch "$BASE/__init__.py"
-
-          echo "✅ video_generator root created"
-
-      # ───────── Step 7: Create fb_ig_story_video_generator ─────────
-      - name: 📁 Create fb_ig_story_video_generator
-        run: |
-          set -e
-
-          BASE="sawajstudiobot/video_generator/fb_ig_story_video_generator"
-
-          # ───── Root ─────
-          touch "$BASE/__init__.py"
-
-          # ───── A_core ─────
-          mkdir -p "$BASE/A_core"
-          touch "$BASE/A_core/__init__.py"
-          touch "$BASE/A_core/A1_config.py"
-          touch "$BASE/A_core/A2_logger.py"
-          touch "$BASE/A_core/A3_telegram.py"
-          touch "$BASE/A_core/A4_utils.py"
-          touch "$BASE/A_core/A5_base_pipeline.py"
-
-          # ───── B_graphics ─────
-          mkdir -p "$BASE/B_graphics"
-          touch "$BASE/B_graphics/__init__.py"
-          touch "$BASE/B_graphics/B1_fonts.py"
-          touch "$BASE/B_graphics/B2_text_wrap.py"
-          touch "$BASE/B_graphics/B3_sparkles.py"
-          touch "$BASE/B_graphics/B4_progress_bar.py"
-          touch "$BASE/B_graphics/B5_badge.py"
-          touch "$BASE/B_graphics/B6_bullets.py"
-          touch "$BASE/B_graphics/B7_watermark.py"
-          touch "$BASE/B_graphics/B8_arabesque.py"
-          touch "$BASE/B_graphics/B9_god_rays.py"
-          touch "$BASE/B_graphics/B10_star_field.py"
-          touch "$BASE/B_graphics/B11_ember.py"
-          touch "$BASE/B_graphics/B12_vignette.py"
-
-          # ───── C_content ─────
-          mkdir -p "$BASE/C_content"
-          touch "$BASE/C_content/__init__.py"
-          touch "$BASE/C_content/C1_hadith.py"
-          touch "$BASE/C_content/C2_ai_provider.py"
-          touch "$BASE/C_content/C3_translator.py"
-          touch "$BASE/C_content/C4_tts.py"
-          touch "$BASE/C_content/C5_music.py"
-          touch "$BASE/C_content/C6_background.py"
-          touch "$BASE/C_content/C7_logo_processor.py"
-          touch "$BASE/C_content/C8_thumbnail.py"
-
-          # ───── D_video ─────
-          mkdir -p "$BASE/D_video"
-          touch "$BASE/D_video/__init__.py"
-          touch "$BASE/D_video/D1_intro.py"
-          touch "$BASE/D_video/D2_main_content.py"
-          touch "$BASE/D_video/D3_outro.py"
-          touch "$BASE/D_video/D4_frames.py"
-          touch "$BASE/D_video/D5_transition.py"
-          touch "$BASE/D_video/D6_composer.py"
-
-          # ───── E_audio ─────
-          mkdir -p "$BASE/E_audio"
-          touch "$BASE/E_audio/__init__.py"
-          touch "$BASE/E_audio/E1_voice_ducking.py"
-          touch "$BASE/E_audio/E2_sfx.py"
-          touch "$BASE/E_audio/E3_mastering.py"
-
-          # ───── F_drive ─────
-          mkdir -p "$BASE/F_drive"
-          touch "$BASE/F_drive/__init__.py"
-          touch "$BASE/F_drive/F1_drive.py"
-
-          # ───── G_entry ─────
-          mkdir -p "$BASE/G_entry"
-          touch "$BASE/G_entry/__init__.py"
-          touch "$BASE/G_entry/G1_story_pipeline.py"
-          touch "$BASE/G_entry/G2_run.py"
-
-          # ───── H_tests ─────
-          mkdir -p "$BASE/H_tests"
-          touch "$BASE/H_tests/__init__.py"
-          touch "$BASE/H_tests/H1_conftest.py"
-          touch "$BASE/H_tests/H2_test_story.py"
-          touch "$BASE/H_tests/H3_test_media.py"
-          touch "$BASE/H_tests/H4_test_render.py"
-
-          # ───── output ─────
-          mkdir -p "$BASE/output/temp"
-          mkdir -p "$BASE/output/final"
-          touch "$BASE/output/temp/.gitkeep"
-          touch "$BASE/output/final/.gitkeep"
-
-          echo "✅ fb_ig_story_video_generator created"
-
-      # ───────── Step 8: Create fb_ig_yt_short_video_generator ─────────
-      - name: 📁 Create fb_ig_yt_short_video_generator
-        run: |
-          set -e
-
-          BASE="sawajstudiobot/video_generator/fb_ig_yt_short_video_generator"
-
-          touch "$BASE/__init__.py"
-
-          # A_core
-          mkdir -p "$BASE/A_core"
-          touch "$BASE/A_core/__init__.py"
-          for f in A1_config A2_logger A3_telegram A4_utils A5_base_pipeline; do
-            touch "$BASE/A_core/$f.py"
-          done
-
-          # B_graphics
-          mkdir -p "$BASE/B_graphics"
-          touch "$BASE/B_graphics/__init__.py"
-          for f in B1_fonts B2_text_wrap B3_sparkles B4_progress_bar B5_badge B6_bullets B7_watermark B8_arabesque B9_god_rays B10_star_field B11_ember B12_vignette; do
-            touch "$BASE/B_graphics/$f.py"
-          done
-
-          # C_content
-          mkdir -p "$BASE/C_content"
-          touch "$BASE/C_content/__init__.py"
-          for f in C1_hadith C2_ai_provider C3_translator C4_tts C5_music C6_background C7_logo_processor C8_thumbnail; do
-            touch "$BASE/C_content/$f.py"
-          done
-
-          # D_video
-          mkdir -p "$BASE/D_video"
-          touch "$BASE/D_video/__init__.py"
-          for f in D1_intro D2_main_content D3_outro D4_frames D5_transition D6_composer; do
-            touch "$BASE/D_video/$f.py"
-          done
-
-          # E_audio
-          mkdir -p "$BASE/E_audio"
-          touch "$BASE/E_audio/__init__.py"
-          for f in E1_voice_ducking E2_sfx E3_mastering; do
-            touch "$BASE/E_audio/$f.py"
-          done
-
-          # F_drive
-          mkdir -p "$BASE/F_drive"
-          touch "$BASE/F_drive/__init__.py"
-          touch "$BASE/F_drive/F1_drive.py"
-
-          # G_entry
-          mkdir -p "$BASE/G_entry"
-          touch "$BASE/G_entry/__init__.py"
-          touch "$BASE/G_entry/G1_short_pipeline.py"
-          touch "$BASE/G_entry/G2_run.py"
-
-          # H_tests
-          mkdir -p "$BASE/H_tests"
-          touch "$BASE/H_tests/__init__.py"
-          touch "$BASE/H_tests/H1_conftest.py"
-          touch "$BASE/H_tests/H2_test_short.py"
-          touch "$BASE/H_tests/H3_test_media.py"
-          touch "$BASE/H_tests/H4_test_render.py"
-
-          # Output
-          mkdir -p "$BASE/output/temp" "$BASE/output/final"
-          touch "$BASE/output/temp/.gitkeep"
-          touch "$BASE/output/final/.gitkeep"
-
-          echo "✅ fb_ig_yt_short_video_generator created"
-
-      # ───────── Step 9: Create fb_yt_long_video_generator ─────────
-      - name: 📁 Create fb_yt_long_video_generator
-        run: |
-          set -e
-
-          BASE="sawajstudiobot/video_generator/fb_yt_long_video_generator"
-
-          touch "$BASE/__init__.py"
-
-          # A_core
-          mkdir -p "$BASE/A_core"
-          touch "$BASE/A_core/__init__.py"
-          for f in A1_config A2_logger A3_telegram A4_utils A5_base_pipeline; do
-            touch "$BASE/A_core/$f.py"
-          done
-
-          # B_graphics
-          mkdir -p "$BASE/B_graphics"
-          touch "$BASE/B_graphics/__init__.py"
-          for f in B1_fonts B2_text_wrap B3_sparkles B4_progress_bar B5_badge B6_bullets B7_watermark B8_arabesque B9_god_rays B10_star_field B11_ember B12_vignette; do
-            touch "$BASE/B_graphics/$f.py"
-          done
-
-          # C_content
-          mkdir -p "$BASE/C_content"
-          touch "$BASE/C_content/__init__.py"
-          for f in C1_hadith C2_ai_provider C3_translator C4_tts C5_music C6_background C7_logo_processor C8_thumbnail; do
-            touch "$BASE/C_content/$f.py"
-          done
-
-          # D_video
-          mkdir -p "$BASE/D_video"
-          touch "$BASE/D_video/__init__.py"
-          for f in D1_intro D2_main_content D3_outro D4_frames D5_transition D6_composer; do
-            touch "$BASE/D_video/$f.py"
-          done
-
-          # E_audio
-          mkdir -p "$BASE/E_audio"
-          touch "$BASE/E_audio/__init__.py"
-          for f in E1_voice_ducking E2_sfx E3_mastering; do
-            touch "$BASE/E_audio/$f.py"
-          done
-
-          # F_drive
-          mkdir -p "$BASE/F_drive"
-          touch "$BASE/F_drive/__init__.py"
-          touch "$BASE/F_drive/F1_drive.py"
-
-          # G_entry
-          mkdir -p "$BASE/G_entry"
-          touch "$BASE/G_entry/__init__.py"
-          touch "$BASE/G_entry/G1_long_pipeline.py"
-          touch "$BASE/G_entry/G2_run.py"
-
-          # H_tests
-          mkdir -p "$BASE/H_tests"
-          touch "$BASE/H_tests/__init__.py"
-          touch "$BASE/H_tests/H1_conftest.py"
-          touch "$BASE/H_tests/H2_test_long.py"
-          touch "$BASE/H_tests/H3_test_media.py"
-          touch "$BASE/H_tests/H4_test_render.py"
-
-          # Output
-          mkdir -p "$BASE/output/temp" "$BASE/output/final"
-          touch "$BASE/output/temp/.gitkeep"
-          touch "$BASE/output/final/.gitkeep"
-
-          echo "✅ fb_yt_long_video_generator created"
-
-      # ───────── Step 10: Show Tree ─────────
-      - name: 🌳 Show Folder Tree
-        run: |
-          echo "============================================"
-          echo "📁 COMPLETE FOLDER STRUCTURE"
-          echo "============================================"
-          find sawajstudiobot -type d | sort
-          echo ""
-          echo "============================================"
-          echo "📊 TOTAL FOLDERS:"
-          find sawajstudiobot -type d | wc -l
-          echo ""
-          echo "📊 TOTAL FILES:"
-          find sawajstudiobot -type f | wc -l
-          echo "============================================"
-
-      # ───────── Step 11: Commit ─────────
-      - name: 🚀 Commit & Push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: create complete folder structure" || exit 0
-          git push
-
-      # ───────── Step 12: Summary ─────────
-      - name: 📋 Summary
-        run: |
-          echo "============================================"
-          echo "🎉 FOLDER STRUCTURE READY"
-          echo "============================================"
-          echo ""
-          echo "✅ sawajstudiobot/"
-          echo "   ├── video_requirement/"
-          echo "   ├── video_uploader/"
-          echo "   │   ├── facebook/"
-          echo "   │   ├── instagram/"
-          echo "   │   └── youtube/"
-          echo "   └── video_generator/"
-          echo "       ├── fb_ig_story_video_generator/"
-          echo "       ├── fb_ig_yt_short_video_generator/"
-          echo "       └── fb_yt_long_video_generator/"
-          echo ""
-          echo "📌 Next step: Fill content in files"
-          echo "============================================"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/ sawajstudiobot/
+          git status
+          git commit -m "Build sawajstudiobot folder structure and workflows" || echo "No changes to commit"
+          git push origin main || git push
