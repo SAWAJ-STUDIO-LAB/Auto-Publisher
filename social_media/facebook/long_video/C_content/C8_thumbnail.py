@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C8_thumbnail.py
-# PATH:      social_media/facebook/story_video/C_content/C8_thumbnail.py
-# PURPOSE:   Auto thumbnail generator
+# 📄 FILE:      C8_thumbnail.py
+# 📁 PATH:      social_media/facebook/long_video/C_content/C8_thumbnail.py
+# 🎯 PURPOSE:   Auto thumbnail generator
 # ============================================================
 
 import os
@@ -11,6 +11,7 @@ from B_graphics.B1_fonts import FontLoader
 
 
 class Thumbnail:
+    """Generate thumbnail JPG."""
 
     def __init__(self, base):
         log_file_start("C8_thumbnail.py", "Thumbnail generator")
