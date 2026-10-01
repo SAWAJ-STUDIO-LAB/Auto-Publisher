@@ -13,20 +13,20 @@ class ShortUploader:
         token = os.environ.get("FACEBOOK_META_TOKEN", "").strip()
         page_id = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
         if not token or not page_id:
-  log_step("F2_upload_short.py", "Missing creds", "fail")
-  return False
+            log_step("F2_upload_short.py", "Missing creds", "fail")
+            return False
         try:
-  with open(video_path, "rb") as f:
-      res = self.base.session.post(
-          f"https://graph.facebook.com/v21.0/{page_id}/videos",
-          data={"access_token": token, "description": caption, "published": "true"},
-          files={"source": f}, timeout=400).json()
-  if res.get("id"):
-      self.base.api_status["Facebook"]["Upload"] = "success"
-      log_api("F2_upload_short.py", "FB", "success", res["id"])
-      return True
-  log_api("F2_upload_short.py", "FB", "failed", str(res)[:100])
-  return False
+            with open(video_path, "rb") as f:
+                res = self.base.session.post(
+                    f"https://graph.facebook.com/v21.0/{page_id}/videos",
+                    data={"access_token": token, "description": caption, "published": "true"},
+                    files={"source": f}, timeout=400).json()
+            if res.get("id"):
+                self.base.api_status["Facebook"]["Upload"] = "success"
+                log_api("F2_upload_short.py", "FB", "success", res["id"])
+                return True
+            log_api("F2_upload_short.py", "FB", "failed", str(res)[:100])
+            return False
         except Exception as e:
-  log_api("F2_upload_short.py", "FB", "failed", str(e)[:100])
-  return False
+            log_api("F2_upload_short.py", "FB", "failed", str(e)[:100])
+            return False
