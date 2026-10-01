@@ -2,74 +2,45 @@
 # SawajStudioBot — Story Video Pipeline (Facebook + Instagram)
 # ═══════════════════════════════════════════════════════════════════════
 #
-# 🎯 Purpose:
-#   Automated Story video generation (50-60s) with:
-#     • Hadith fetch (50-100 words)
-#     • Hindi translation
-#     • 3-language word-by-word bullets
-#     • Background music + video
-#     • Multi-platform upload (FB / IG)
-#
-# ⏰ Schedule:
-#   Every 6 hours — 00:00, 06:00, 12:00, 18:00 UTC
-#
-# 🚀 Manual Run:
-#   Actions → 📖 Story Video → Run workflow
+# 🎯 4 MODES:
+#   • schedule     → Auto upload to ALL platforms
+#   • drive_only   → Only Google Drive backup
+#   • social       → Drive + chosen social platform
+#   • all          → Drive + all social platforms
 #
 # ═══════════════════════════════════════════════════════════════════════
 
 name: 📖 Story Video (FB + IG)
 
-# ═══════════════════════════════════════════════════════════════════════
-# 🎯 TRIGGERS
-# ═══════════════════════════════════════════════════════════════════════
-
 on:
   schedule:
-    # Every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *'   # Every 6 hours
   workflow_dispatch:
     inputs:
-      upload_to_social:
-        description: '📤 Upload to social media?'
+      mode:
+        description: '🎯 Upload Mode'
         required: true
-        default: 'false'
+        default: 'drive_only'
         type: choice
         options:
-          - 'false'
-          - 'true'
+          - drive_only
+          - social
+          - all
       platform:
-        description: '🌐 Platform'
-        required: true
+        description: '🌐 Platform (only for "social" mode)'
+        required: false
         default: 'facebook'
         type: choice
         options:
           - facebook
           - instagram
-      skip_upload:
-        description: '⏭️ Skip upload (generate only)'
-        required: false
-        default: false
-        type: boolean
-
-# ═══════════════════════════════════════════════════════════════════════
-# 🔒 PERMISSIONS
-# ═══════════════════════════════════════════════════════════════════════
 
 permissions:
   contents: read
 
-# ═══════════════════════════════════════════════════════════════════════
-# 🚫 CONCURRENCY — prevent overlapping runs
-# ═══════════════════════════════════════════════════════════════════════
-
 concurrency:
   group: story-video-${{ github.ref }}
   cancel-in-progress: false
-
-# ═══════════════════════════════════════════════════════════════════════
-# 🌍 GLOBAL ENV
-# ═══════════════════════════════════════════════════════════════════════
 
 env:
   PYTHON_VERSION: '3.11'
@@ -78,61 +49,47 @@ env:
   FORCE_COLOR: '1'
   GENERATOR_DIR: 'sawajstudiobot/video_generator/fb_ig_story_video_generator'
 
-# ═══════════════════════════════════════════════════════════════════════
-# 🚀 JOBS
-# ═══════════════════════════════════════════════════════════════════════
-
 jobs:
-  # ─────────────────────────────────────────────────────────────────────
-  # JOB 1: VALIDATE SETUP
-  # ─────────────────────────────────────────────────────────────────────
   validate:
     name: 🔍 Validate Setup
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      should_upload: ${{ steps.decide.outputs.should_upload }}
+      upload_mode: ${{ steps.decide.outputs.upload_mode }}
       platform: ${{ steps.decide.outputs.platform }}
 
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 🎯 Decide Upload Strategy
+      - name: 🎯 Decide Upload Mode
         id: decide
         run: |
           EVENT="${{ github.event_name }}"
-          INPUT_UPLOAD="${{ github.event.inputs.upload_to_social }}"
-          INPUT_PLATFORM="${{ github.event.inputs.platform }}"
-          SKIP="${{ github.event.inputs.skip_upload }}"
+          MODE="${{ github.event.inputs.mode }}"
+          PLATFORM="${{ github.event.inputs.platform }}"
 
           if [ "$EVENT" = "schedule" ]; then
-            UPLOAD="true"
+            MODE="all"
             PLATFORM="facebook"
-          else
-            UPLOAD="${INPUT_UPLOAD:-false}"
-            PLATFORM="${INPUT_PLATFORM:-facebook}"
           fi
 
-          if [ "$SKIP" = "true" ]; then
-            UPLOAD="false"
-          fi
+          [ -z "$MODE" ] && MODE="drive_only"
+          [ -z "$PLATFORM" ] && PLATFORM="facebook"
 
-          echo "should_upload=$UPLOAD" >> $GITHUB_OUTPUT
+          echo "upload_mode=$MODE" >> $GITHUB_OUTPUT
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
-          echo "✅ Upload: $UPLOAD | Platform: $PLATFORM"
+          echo "✅ Mode: $MODE | Platform: $PLATFORM"
 
       - name: ✅ Verify Critical Files
         run: |
-          echo "::group::📁 Checking generator files"
           GEN="${{ env.GENERATOR_DIR }}"
           MISSING=0
-
           for f in \
             "$GEN/G_entry/G2_run.py" \
             "$GEN/G_entry/G1_story_pipeline.py" \
-            "$GEN/A_core/A1_config.py" \
-            "$GEN/C_content/C1_hadith.py" \
+            "$GEN/E_audio/E1_voice_ducking.py" \
+            "$GEN/E_audio/E3_mastering.py" \
             "sawajstudiobot/video_requirement/requirements.txt" \
           ; do
             if [ -f "$f" ]; then
@@ -142,18 +99,11 @@ jobs:
               MISSING=$((MISSING + 1))
             fi
           done
-
-          echo "::endgroup::"
-
           if [ $MISSING -gt 0 ]; then
             echo "::error::$MISSING critical file(s) missing!"
             exit 1
           fi
-          echo "✅ All critical files present"
 
-  # ─────────────────────────────────────────────────────────────────────
-  # JOB 2: GENERATE STORY VIDEO
-  # ─────────────────────────────────────────────────────────────────────
   generate-story:
     name: 📖 Generate Story Video
     runs-on: ubuntu-latest
@@ -171,23 +121,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: '**/requirements.txt'
 
-      - name: ⚙️ Install system tools (ffmpeg, fonts)
+      - name: ⚙️ Install system tools
         run: |
-          echo "::group::📦 Installing system packages"
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            ffmpeg \
-            fonts-noto \
-            fonts-noto-cjk \
-            fonts-noto-color-emoji \
-            wget \
-            curl
-          echo "::endgroup::"
-
-          echo "::group::📊 Versions"
-          ffmpeg -version | head -1
-          python3 --version
-          echo "::endgroup::"
+            ffmpeg fonts-noto fonts-noto-cjk \
+            fonts-noto-color-emoji wget curl
 
       - name: 💾 Cache fonts
         id: cache-fonts
@@ -196,13 +135,10 @@ jobs:
           path: ~/.fonts
           key: noto-fonts-v2-${{ runner.os }}
 
-      - name: 🔤 Download Noto fonts (Hindi + Arabic + Latin)
+      - name: 🔤 Download Noto fonts
         if: steps.cache-fonts.outputs.cache-hit != 'true'
         run: |
-          echo "::group::🔤 Downloading fonts"
-          mkdir -p ~/.fonts
-          cd ~/.fonts
-
+          mkdir -p ~/.fonts && cd ~/.fonts
           declare -A FONTS=(
             ["NotoSans-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf"
             ["NotoSans-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
@@ -211,180 +147,87 @@ jobs:
             ["NotoNaskhArabic-Bold.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Bold.ttf"
             ["NotoNaskhArabic-Regular.ttf"]="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf"
           )
-
           for name in "${!FONTS[@]}"; do
-            url="${FONTS[$name]}"
-            if wget -q -nc "$url" -O "$name"; then
-              echo "  ✅ $name"
-            else
-              echo "  ⚠️ Failed: $name"
-            fi
+            wget -q -nc "${FONTS[$name]}" -O "$name" && echo "  ✅ $name"
           done
-
           fc-cache -f
-          echo "::endgroup::"
 
-          echo "::group::📋 Installed fonts"
-          ls -lh ~/.fonts/ | head -20
-          echo "::endgroup::"
-
-      - name: 💾 Cache pip packages
+      - name: 💾 Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
+          restore-keys: pip-${{ runner.os }}-
 
       - name: 📦 Install Python packages
         run: |
-          echo "::group::📦 Upgrading pip"
           python -m pip install --upgrade pip wheel setuptools
-          echo "::endgroup::"
-
-          echo "::group::📦 Installing requirements.txt"
           pip install -r sawajstudiobot/video_requirement/requirements.txt
-          echo "::endgroup::"
-
-          echo "::group::📦 Installing TTS engines"
           pip install edge-tts
-          echo "::endgroup::"
 
-          echo "::group::📋 Installed packages"
-          pip list | grep -E "(requests|Pillow|mutagen|google|edge-tts|gTTS)" || true
-          echo "::endgroup::"
-
-      - name: 🔐 Verify secrets
-        run: |
-          echo "::group::🔐 Checking secrets availability"
-          MISSING=0
-
-          check() {
-            if [ -z "${!1}" ]; then
-              echo "  ⚠️  $1 — NOT SET"
-              MISSING=$((MISSING + 1))
-            else
-              echo "  ✅ $1 — SET"
-            fi
-          }
-
-          check TELEGRAM_BOT_TOKEN
-          check TELEGRAM_CHAT_ID
-          check GROQ_API_KEY
-          check PEXELS_API_KEY
-
-          echo "::endgroup::"
-
-          if [ $MISSING -gt 0 ]; then
-            echo "::warning::$MISSING secret(s) missing — pipeline may use fallbacks"
-          fi
+      - name: ▶️ Run Story Pipeline
         env:
+          # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
-      - name: ▶️ Run Story Video Pipeline
-        id: pipeline
-        env:
-          # ─── Telegram ───
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-          # ─── Facebook ───
+          # Facebook / Instagram
           FACEBOOK_META_TOKEN: ${{ secrets.FACEBOOK_META_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-
-          # ─── Instagram ───
           FACEBOOK_INSTAGRAM_META_TOKEN: ${{ secrets.FACEBOOK_INSTAGRAM_META_TOKEN }}
           INSTAGRAM_BUSINESS_ACCOUNT_ID: ${{ secrets.INSTAGRAM_BUSINESS_ACCOUNT_ID }}
-
-          # ─── Google Drive ───
+          # Google Drive
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
           GDRIVE_STORY_VIDEO_FOLDER_ID: ${{ secrets.GDRIVE_STORY_VIDEO_FOLDER_ID }}
-
-          # ─── AI Providers ───
+          # AI
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
-
-          # ─── TTS / Translation ───
+          # TTS / Translation
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
-
-          # ─── Media APIs ───
+          # Media
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
-
-          # ─── Hadith API ───
           HADITH_API_URL: ${{ secrets.HADITH_API_URL }}
-
-          # ─── Runtime ───
+          # Runtime
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          UPLOAD_TO_SOCIAL: ${{ needs.validate.outputs.should_upload }}
+          UPLOAD_MODE: ${{ needs.validate.outputs.upload_mode }}
           PLATFORM: ${{ needs.validate.outputs.platform }}
         run: |
-          echo "::group::📖 Starting Story Video Pipeline"
-          echo "📅 Event:     $GITHUB_EVENT_NAME"
-          echo "📤 Upload:    $UPLOAD_TO_SOCIAL"
-          echo "🌐 Platform:  $PLATFORM"
-          echo "📁 Dir:       $GENERATOR_DIR"
-          echo "::endgroup::"
-
+          echo "🎯 Mode: $UPLOAD_MODE | Platform: $PLATFORM"
           cd "$GENERATOR_DIR"
           python3 G_entry/G2_run.py 2>&1 | tee pipeline.log
 
-      - name: 📋 Show pipeline log
+      - name: 📋 Show log
         if: always()
         run: |
           if [ -f "${{ env.GENERATOR_DIR }}/pipeline.log" ]; then
-            echo "::group::📋 Pipeline Log (last 200 lines)"
             tail -200 "${{ env.GENERATOR_DIR }}/pipeline.log"
-            echo "::endgroup::"
           fi
 
-      - name: 🔍 Verify Generated Video
+      - name: 🔍 Verify Output
         if: success()
         id: verify
         run: |
-          echo "::group::🔍 Checking output"
           FINAL_DIR="${{ env.GENERATOR_DIR }}/output/final"
-
-          if [ ! -d "$FINAL_DIR" ]; then
-            echo "::error::Output directory not found"
-            exit 1
-          fi
-
           VIDEO=$(find "$FINAL_DIR" -name "*.mp4" -type f | head -1)
-          THUMB=$(find "$FINAL_DIR" -name "thumbnail.jpg" -type f | head -1)
-
           if [ -z "$VIDEO" ]; then
-            echo "::error::No video found in $FINAL_DIR"
-            ls -la "$FINAL_DIR"
+            echo "::error::No video generated!"
             exit 1
           fi
-
           SIZE=$(du -h "$VIDEO" | cut -f1)
           DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO" 2>/dev/null || echo "?")
-
-          echo "  ✅ Video:     $(basename "$VIDEO")"
-          echo "  📦 Size:      $SIZE"
-          echo "  ⏱️  Duration: ${DURATION}s"
-          [ -n "$THUMB" ] && echo "  ✅ Thumbnail: $(basename "$THUMB")" || echo "  ⚠️  No thumbnail"
-
-          echo "video_path=$VIDEO" >> $GITHUB_OUTPUT
           echo "video_size=$SIZE" >> $GITHUB_OUTPUT
           echo "video_duration=$DURATION" >> $GITHUB_OUTPUT
-          echo "::endgroup::"
+          echo "✅ Video: $SIZE | ${DURATION}s"
 
-      - name: 📤 Upload video artifacts
+      - name: 📤 Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -392,36 +235,25 @@ jobs:
           path: |
             ${{ env.GENERATOR_DIR }}/output/final/*.mp4
             ${{ env.GENERATOR_DIR }}/output/final/*.jpg
-            ${{ env.GENERATOR_DIR }}/output/final/*.srt
             ${{ env.GENERATOR_DIR }}/pipeline.log
           retention-days: 7
           if-no-files-found: warn
           compression-level: 0
 
-      - name: 📊 Generate Summary
+      - name: 📊 Summary
         if: always()
         run: |
           {
-            echo "# 📖 Story Video Pipeline — Run #${{ github.run_number }}"
+            echo "# 📖 Story Video — Run #${{ github.run_number }}"
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| **Status** | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |"
-            echo "| **Event** | \`${{ github.event_name }}\` |"
-            echo "| **Platform** | \`${{ needs.validate.outputs.platform }}\` |"
-            echo "| **Upload** | \`${{ needs.validate.outputs.should_upload }}\` |"
-            echo "| **Triggered by** | @${{ github.actor }} |"
-            echo "| **Run ID** | ${{ github.run_id }} |"
-
+            echo "| Status | ${{ job.status == 'success' && '✅' || '❌' }} |"
+            echo "| Event | \`${{ github.event_name }}\` |"
+            echo "| Mode | \`${{ needs.validate.outputs.upload_mode }}\` |"
+            echo "| Platform | \`${{ needs.validate.outputs.platform }}\` |"
             if [ "${{ steps.verify.outcome }}" = "success" ]; then
-              echo "| **Video Size** | ${{ steps.verify.outputs.video_size }} |"
-              echo "| **Duration** | ${{ steps.verify.outputs.video_duration }}s |"
+              echo "| Size | ${{ steps.verify.outputs.video_size }} |"
+              echo "| Duration | ${{ steps.verify.outputs.video_duration }}s |"
             fi
-
-            echo ""
-            echo "## 📁 Artifacts"
-            echo "Download from the **Artifacts** section above (retention: 7 days)."
-            echo ""
-            echo "## 🔗 Links"
-            echo "- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           } >> $GITHUB_STEP_SUMMARY
