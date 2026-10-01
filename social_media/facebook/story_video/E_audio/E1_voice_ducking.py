@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      E1_voice_ducking.py
-# 📁 PATH:      social_media/facebook/story_video/E_audio/E1_voice_ducking.py
+# 📁 PATH:      social_media/facebook/short_video/E_audio/E1_voice_ducking.py
 # 🎯 PURPOSE:   Mix voice + music (music auto-lowers during voice)
 # ============================================================
 
@@ -26,16 +26,7 @@ class VoiceDucking:
     # ─────────────────────────────────────────────────────────
     def mix(self, voice_file, music_file, out_file, voice_dur,
             music_vol=0.20):
-        """
-        Mix voice over music.
-        
-        Args:
-            voice_file: path to voice mp3
-            music_file: path to music mp3
-            out_file: output mp3 path
-            voice_dur: voice duration in seconds
-            music_vol: music volume (0.20 = 20%)
-        """
+        """Mix voice over music with fade in/out."""
         log_step("E1_voice_ducking.py", "mix() starting", "ok")
 
         fade = max(voice_dur - 3.0, 1.0)
