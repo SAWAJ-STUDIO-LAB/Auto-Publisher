@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C7_logo_processor.py
-# PATH:      social_media/facebook/story_video/C_content/C7_logo_processor.py
-# PURPOSE:   Process logo → avatar with border + glow
+# 📄 FILE:      C7_logo_processor.py
+# 📁 PATH:      social_media/facebook/story_video/C_content/C7_logo_processor.py
+# 🎯 PURPOSE:   Process logo → avatar with border + glow
 # ============================================================
 
 import os
@@ -9,15 +9,26 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
+# ─────────────────────────────────────────────────────────────
+# ① LOGO PROCESSOR CLASS
+# ─────────────────────────────────────────────────────────────
 class LogoProcessor:
+    """Load logo.png and add gold border + glow."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self):
         log_file_start("C7_logo_processor.py", "Logo processing")
         log_file_end("C7_logo_processor.py", "success", "Ready")
 
+    # ─────────────────────────────────────────────────────────
+    # ③ MAKE — process logo → avatar
+    # ─────────────────────────────────────────────────────────
     def make(self, outfile="avatar.png"):
         log_step("C7_logo_processor.py", "make() starting", "ok")
 
+        # ═══════════════ Try user logo files ═══════════════
         for src in ["logo.png", "logo.jpg", "assets/logo.png", "assets/logo.jpg"]:
             if os.path.exists(src):
                 try:
@@ -34,14 +45,19 @@ class LogoProcessor:
                     canvas = Image.new("RGBA", (nw, nh), (0, 0, 0, 0))
                     draw = ImageDraw.Draw(canvas)
 
+                    # Gold border
                     draw.rectangle([0, 0, nw - 1, nh - 1],
                                    outline=(212, 175, 55, 255), width=border)
+                    # Inner thin line
                     draw.rectangle([border, border, nw - border - 1,
                                     nh - bottom - 1],
                                    outline=(255, 215, 100, 200), width=2)
+                    # Bottom strip
                     draw.rectangle([0, nh - bottom, nw - 1, nh - 1],
                                    fill=(20, 15, 8, 245))
+                    # Paste logo
                     canvas.paste(img, (border, border), img)
+                    # Glow
                     glow = canvas.filter(ImageFilter.GaussianBlur(6))
                     final = Image.alpha_composite(glow, canvas)
                     final.save(outfile)
@@ -50,6 +66,7 @@ class LogoProcessor:
                 except Exception as e:
                     log_step("C7_logo_processor.py", f"Err {src}", "fail", str(e)[:60])
 
+        # ═══════════════ Fallback: Default text avatar ═══════════════
         try:
             log_step("C7_logo_processor.py", "Default avatar", "info")
             canvas = Image.new("RGBA", (400, 170), (0, 0, 0, 0))
