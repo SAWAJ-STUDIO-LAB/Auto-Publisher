@@ -1,15 +1,20 @@
 # ============================================================
-# FILE:      B8_arabesque.py
-# PATH:      social_media/facebook/story_video/B_graphics/B8_arabesque.py
-# PURPOSE:   Islamic pattern overlay
+# 📄 FILE:      B8_arabesque.py
+# 📁 PATH:      social_media/facebook/story_video/B_graphics/B8_arabesque.py
+# 🎯 PURPOSE:   Islamic pattern overlay (faint decorative dots)
 # ============================================================
 
 import math
 
 
+# ─────────────────────────────────────────────────────────────
+# ① DRAW ARABESQUE — faint rotating pattern
+# ─────────────────────────────────────────────────────────────
 def draw_arabesque(draw, t, opacity=30):
+    """Draw faint arabesque-style pattern (rotating)."""
     cx, cy = 540, 960
     r_base = 200 + int(20 * math.sin(t * 0.5))
+
     for i in range(8):
         angle = (i * math.pi / 4) + t * 0.1
         x = cx + int(r_base * math.cos(angle))
