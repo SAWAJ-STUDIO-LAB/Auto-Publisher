@@ -2,6 +2,7 @@
 # 📄 FILE:      F2_upload_short.py
 # 📁 PATH:      social_media/facebook/short_video/F_upload/F2_upload_short.py
 # 🎯 PURPOSE:   Upload Short video to Facebook Page
+# ⚠️  NOTE:     Uses Business Token directly (no me/accounts call)
 # ============================================================
 
 import os
@@ -32,9 +33,17 @@ class ShortUploader:
         token = os.environ.get("FACEBOOK_META_TOKEN", "").strip()
         page_id = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
 
-        if not token or not page_id:
-            log_step("F2_upload_short.py", "Missing creds", "fail")
+        if not token:
+            log_step("F2_upload_short.py", "META token missing", "fail")
             return False
+
+        if not page_id:
+            log_step("F2_upload_short.py", "Page ID missing", "fail")
+            return False
+
+        # ───────── Business Token = Page Token (use directly) ─────────
+        log_step("F2_upload_short.py",
+                 f"Using Business Token for Page {page_id}", "ok")
 
         try:
             # ───────── Upload video to Page ─────────
@@ -52,14 +61,25 @@ class ShortUploader:
                     },
                     files={"source": f}, timeout=600).json()
 
+            # ───────── Check response ─────────
             if res.get("id"):
                 self.base.api_status["Facebook"]["Upload"] = "success"
                 log_api("F2_upload_short.py", "FB-Short", "success", res["id"])
                 return True
 
-            self.base.api_status["Facebook"]["Upload"] = "failed"
-            log_api("F2_upload_short.py", "FB-Short", "failed", str(res)[:100])
+            # ───────── Failed — log error details ─────────
+            err = res.get("error", {})
+            err_msg = err.get("message", "Unknown error")
+            err_code = err.get("code", "?")
+            err_subcode = err.get("error_subcode", "")
+
+            log_api("F2_upload_short.py", "FB-Short", "failed",
+                    f"Code {err_code}/{err_subcode}: {err_msg[:80]}")
+
+            self.base.api_status["Facebook"]["Upload"] = \
+                f"failed (Code {err_code})"
             return False
+
         except Exception as e:
             self.base.api_status["Facebook"]["Upload"] = f"failed ({str(e)[:40]})"
             log_api("F2_upload_short.py", "FB-Short", "failed", str(e)[:100])
