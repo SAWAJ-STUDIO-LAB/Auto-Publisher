@@ -1,80 +1,63 @@
 # ╔══════════════════════════════════════════════════════════╗
-# ║  📄 FILE:      E1_voice_ducking.py                       ║
+# ║  📄 FILE:      E2_sfx.py                                 ║
 # ║  📁 PATH:      .../fb_ig_story_video_generator/          ║
-# ║                E_audio/E1_voice_ducking.py               ║
-# ║  🎯 PURPOSE:   Mix voice + music with ducking            ║
+# ║                E_audio/E2_sfx.py                         ║
+# ║  🎯 PURPOSE:   Sound effects (whoosh, ding)              ║
 # ║  📖 FOLDER:    E_audio                                   ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎚️  VOICE DUCKING MODULE                               ║
+║   🔊 SOUND EFFECTS MODULE                                ║
 ║   ═══════════════════════                                ║
 ║                                                          ║
 ║   🎯 Purpose:                                            ║
-║      Voice + music ko mix karna (music duck)             ║
+║      Sound effects generate karna                        ║
 ║                                                          ║
-║   📖 How it works:                                       ║
-║      • Voice: 100% volume                                ║
-║      • Music: 20% volume (auto-lowered)                  ║
-║      • Music fade-in:  2s                                ║
-║      • Music fade-out: 3s                                ║
+║   📖 Functions:                                          ║
+║      • whoosh_cmd()  → Transition whoosh sound           ║
+║      • ding_cmd()    → CTA reveal ding sound             ║
 ║                                                          ║
-║   🎯 Output:                                              ║
-║      Single MP3 with voice + music mixed                 ║
+║   📝 Note:                                                ║
+║      Yeh functions FFmpeg commands return karti hain    ║
+║      Directly run nahi karti                            ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
-"""
-
-from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
 # ═══════════════════════════════════════════════════════════
-# 🎚️  VOICE DUCKING CLASS
+# 🔊 WHOOSH — soft whoosh for transitions
 # ═══════════════════════════════════════════════════════════
 
-class VoiceDucking:
-    """Mix voice over music with volume ducking."""
+def whoosh_cmd(outfile="whoosh.mp3"):
+    """
+    Return FFmpeg command for whoosh sound.
 
-    # ─────────────────────────────────────────────────────
-    # ① INIT
-    # ─────────────────────────────────────────────────────
-    def __init__(self, base):
-        log_file_start("E1_voice_ducking.py", "Voice + music mix")
-        self.base = base
-        log_file_end("E1_voice_ducking.py", "success", "Ready")
+    Args:
+        outfile: output mp3 path
 
-    # ─────────────────────────────────────────────────────
-    # ② MIX — mix voice + music
-    # ─────────────────────────────────────────────────────
-    def mix(self, voice_file, music_file, out_file, voice_dur,
-            music_vol=0.20):
-        """
-        Mix voice over music with fade in/out.
+    Returns:
+        FFmpeg command string
+    """
+    return (f'ffmpeg -y -f lavfi -i "anoisesrc=d=0.5:c=pink:a=0.5" '
+            f'-af "afade=t=in:d=0.1,afade=t=out:st=0.3:d=0.2,volume=0.3" '
+            f'{outfile}')
 
-        Args:
-            voice_file: voice mp3 path
-            music_file: music mp3 path
-            out_file:   output mp3 path
-            voice_dur:  voice duration (seconds)
-            music_vol:  music volume (0.20 = 20%)
 
-        Returns:
-            out_file path
-        """
-        log_step("E1_voice_ducking.py", "mix() starting", "ok")
+# ═══════════════════════════════════════════════════════════
+# 🔔 DING — soft bell for CTA reveal
+# ═══════════════════════════════════════════════════════════
 
-        # ═══════════ Fade out point ═══════════
-        fade = max(voice_dur - 3.0, 1.0)
+def ding_cmd(outfile="ding.mp3"):
+    """
+    Return FFmpeg command for ding sound.
 
-        # ═══════════ FFmpeg mix command ═══════════
-        self.base.run_cmd(
-            f'ffmpeg -y -i {voice_file} -i {music_file} '
-            f'-filter_complex '
-            f'"[1:a]volume={music_vol},afade=t=in:st=0:d=2,'
-            f'afade=t=out:st={fade:.2f}:d=3[bg];'
-            f'[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]" '
-            f'-map "[aout]" -c:a libmp3lame -b:a 192k {out_file}')
+    Args:
+        outfile: output mp3 path
 
-        log_step("E1_voice_ducking.py", "Mixed", "ok")
-        return out_file
+    Returns:
+        FFmpeg command string
+    """
+    return (f'ffmpeg -y -f lavfi -i "sine=frequency=880:duration=0.5" '
+            f'-af "afade=t=out:st=0.2:d=0.3,volume=0.4" '
+            f'{outfile}')
