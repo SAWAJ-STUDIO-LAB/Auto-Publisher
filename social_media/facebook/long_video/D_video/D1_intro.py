@@ -40,3 +40,18 @@ def draw_intro(img, draw, t, intro_dur, has_logo):
                 base = Image.open("avatar.png").convert("RGBA")
                 sw = int(240 * (0.6 + 0.4 * logo_p))
                 sh = int(100 * (0.6 + 0.4 * logo_p))
+                logo = base.resize((sw, sh), Image.Resampling.LANCZOS)
+                lx = (1080 - sw) // 2
+                img.paste(logo, (lx, 720), logo)
+            except Exception:
+                pass
+
+    title_p = min(1.0, max(0.0, (p - 0.5) / 0.4))
+    if title_p > 0:
+        draw_centered(draw, "HADITH OF THE DAY", 980, font_title,
+                      (*C_GOLD, int(255 * title_p)))
+        if title_p > 0.5:
+            draw_centered(draw, "Full Long Hadith", 1080, font_sub,
+                          (180, 160, 130, int(200 * title_p)))
+
+    draw_sparkles(draw, t)
