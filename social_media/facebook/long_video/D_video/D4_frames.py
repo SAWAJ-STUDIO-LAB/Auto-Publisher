@@ -1,7 +1,8 @@
 # ============================================================
-# FILE:      D4_frames.py
-# PATH:      social_media/facebook/story_video/D_video/D4_frames.py
-# PURPOSE:   Combine intro + main + outro into frames
+# 📄 FILE:      D4_frames.py
+# 📁 PATH:      social_media/facebook/long_video/D_video/D4_frames.py
+# 🎯 PURPOSE:   Combine intro + main + outro into frames
+# ⏱️  TIMING:   Intro 2s + Main 5-13 min + Outro 2s = 5-15 min total
 # ============================================================
 
 import os
@@ -13,20 +14,26 @@ from D_video.D3_outro import draw_outro
 
 
 class Frames:
+    """Generate all frames — intro + main + outro."""
 
     def __init__(self):
         log_file_start("D4_frames.py", "Frame generation")
         self.fps = 25
-        self.intro_dur = 2.5
-        self.outro_dur = 3.0
-        log_file_end("D4_frames.py", "success", "Ready")
+        self.intro_dur = 2.0
+        self.outro_dur = 2.0
+        log_file_end("D4_frames.py", "success",
+                     f"Timing: {self.intro_dur}s intro + {self.outro_dur}s outro")
 
     def generate(self, voice_dur, has_logo, hindi, urdu, english,
-                 hadith_label="", out_dir="s_frames"):
+                 hadith_label="", out_dir="l_frames"):
         os.makedirs(out_dir, exist_ok=True)
-        log_step("D4_frames.py", f"generate() dur={voice_dur:.1f}s", "ok")
 
         total = self.intro_dur + voice_dur + self.outro_dur
+
+        log_step("D4_frames.py",
+                 f"generate: intro={self.intro_dur}s + voice={voice_dur:.1f}s + outro={self.outro_dur}s = {total:.1f}s",
+                 "ok")
+
         frames_count = int(total * self.fps)
         log_step("D4_frames.py", f"Generating {frames_count} frames", "info")
 
