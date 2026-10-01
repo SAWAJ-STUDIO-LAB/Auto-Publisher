@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      E3_mastering.py
-# 📁 PATH:      social_media/facebook/story_video/E_audio/E3_mastering.py
+# 📁 PATH:      social_media/facebook/short_video/E_audio/E3_mastering.py
 # 🎯 PURPOSE:   Audio mastering (normalize, tempo, volume)
 # ============================================================
 
