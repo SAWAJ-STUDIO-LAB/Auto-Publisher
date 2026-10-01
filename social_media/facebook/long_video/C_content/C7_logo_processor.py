@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      C7_logo_processor.py
-# PATH:      social_media/facebook/story_video/C_content/C7_logo_processor.py
-# PURPOSE:   Process logo → avatar with border + glow
+# 📄 FILE:      C7_logo_processor.py
+# 📁 PATH:      social_media/facebook/long_video/C_content/C7_logo_processor.py
+# 🎯 PURPOSE:   Process logo → avatar with gold border + glow
 # ============================================================
 
 import os
@@ -10,6 +10,7 @@ from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
 class LogoProcessor:
+    """Load logo.png and add gold border + glow."""
 
     def __init__(self):
         log_file_start("C7_logo_processor.py", "Logo processing")
@@ -50,6 +51,7 @@ class LogoProcessor:
                 except Exception as e:
                     log_step("C7_logo_processor.py", f"Err {src}", "fail", str(e)[:60])
 
+        # Fallback: Default text avatar
         try:
             log_step("C7_logo_processor.py", "Default avatar", "info")
             canvas = Image.new("RGBA", (400, 170), (0, 0, 0, 0))
