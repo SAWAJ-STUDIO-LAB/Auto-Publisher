@@ -1,107 +1,116 @@
 # ╔══════════════════════════════════════════════════════════╗
-# ║  📄 FILE:      C4_tts.py                                 ║
+# ║  📄 FILE:      C5_music.py                               ║
 # ║  📁 PATH:      .../fb_yt_long_video_generator/           ║
-# ║                C_content/C4_tts.py                       ║
-# ║  🎯 PURPOSE:   Multi-engine Voiceover TTS Generator      ║
+# ║                C_content/C5_music.py                     ║
+# ║  🎯 PURPOSE:   Background music (900s for Long)          ║
 # ║  📖 FOLDER:    C_content                                 ║
 # ╚══════════════════════════════════════════════════════════╝
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎙️ TTS VOICE GENERATOR MODULE                          ║
-║   ═════════════════════════════                          ║
+║   🎵 MUSIC MODULE (LONG)                                 ║
+║   ═══════════════════════                                ║
 ║                                                          ║
 ║   🎯 Purpose:                                            ║
-║      ElevenLabs → Edge-TTS → gTTS multi-engine audio     ║
-║      narration generator for Hindi, Arabic & English.    ║
+║      Background music fetch (900s+ for Long video)       ║
+║                                                          ║
+║   📖 Flow:                                               ║
+║      1. Freesound API (200-1800s duration)               ║
+║      2. Pixabay CDN (with -stream_loop -1)               ║
+║      3. Generated ambient pad (last resort)              ║
+║                                                          ║
+║   🎚️  Settings:                                           ║
+║      • Volume:   0.18 (softer for long)                  ║
+║      • Duration: 900 seconds (15 min max)                ║
+║      • Fade in:  3s                                      ║
+║      • Fade out: 8s                                      ║
+║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
 
 import os
-import asyncio
-import requests
-from A_core.A1_config import Config
-from A_core.A2_logger import log_file_start, log_file_end, log_api, log_step
+import random
+from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
-class TTSManager:
-    """Generates audio files using multiple TTS engines."""
+# ═══════════════════════════════════════════════════════════
+# ⚙️  CONSTANTS
+# ═══════════════════════════════════════════════════════════
 
-    def __init__(self, session=None):
-        log_file_start("C4_tts.py", "Init TTS Manager")
-        self.cfg = Config()
-        self.session = session or requests.Session()
-        log_file_end("C4_tts.py", "success")
+MUSIC_VOL = 0.18
+MUSIC_DUR = 900      # ⭐ Long: 900s (15 min max)
 
-    def generate_audio(self, text: str, output_path: str, lang: str = "hi") -> bool:
-        """Attempts ElevenLabs first, then Edge-TTS, then gTTS."""
-        if not text or not text.strip():
-            return False
 
-        # 1. Try ElevenLabs
-        if self.cfg.ELEVENLABS_API_KEY:
-            if self._try_elevenlabs(text, output_path):
-                return True
+class Music:
+    """Fetch background music for long videos."""
 
-        # 2. Try Edge-TTS
-        if self._try_edge_tts(text, output_path, lang):
-            return True
+    def __init__(self, base):
+        log_file_start("C5_music.py", "Background music fetch")
+        self.base = base
+        log_file_end("C5_music.py", "success", "Ready")
 
-        # 3. Fallback gTTS
-        return self._try_gtts(text, output_path, lang)
+    def get(self, outfile="music_soft.mp3"):
+        """Fetch background music (900s for Long)."""
+        log_step("C5_music.py", f"get() (target {MUSIC_DUR}s)", "ok")
 
-    def _try_elevenlabs(self, text: str, output_path: str) -> bool:
-        try:
-            voice_id = "21m00Tcm4TlvDq8ikWAM"  # Default clear male voice
-            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-            headers = {
-                "xi-api-key": self.cfg.ELEVENLABS_API_KEY,
-                "Content-Type": "application/json",
-            }
-            body = {
-                "text": text,
-                "voice_settings": {"stability": 0.75, "similarity_boost": 0.85},
-            }
-            r = self.session.post(url, json=body, headers=headers, timeout=30)
-            if r.status_code == 200:
-                with open(output_path, "wb") as f:
-                    f.write(r.content)
-                log_api("C4_tts.py", "ElevenLabs TTS", "success")
-                return True
-        except Exception as e:
-            log_api("C4_tts.py", "ElevenLabs TTS", "failed", str(e)[:50])
-        return False
+        # ═══════════ Try Freesound ═══════════
+        fs = os.environ.get("FREESOUND_API_KEY")
+        if fs:
+            try:
+                log_step("C5_music.py", "Trying Freesound", "info")
+                r = self.base.session.get(
+                    "https://freesound.org/apiv2/search/text/",
+                    params={
+                        "query": "soft ambient meditation islamic peaceful",
+                        "filter": "duration:[200 TO 1800]",
+                        "fields": "id,name,previews",
+                        "page_size": 10,
+                        "token": fs,
+                    }, timeout=14)
+                if r.status_code == 200 and r.json().get("results"):
+                    s = random.choice(r.json()["results"])
+                    p = (s.get("previews", {}).get("preview-hq-mp3")
+                         or s.get("previews", {}).get("preview-lq-mp3"))
+                    if p and self.base.download(p, "music_raw.mp3"):
+                        self.base.run_cmd(
+                            f'ffmpeg -y -stream_loop -1 -i music_raw.mp3 -af '
+                            f'"volume={MUSIC_VOL},afade=t=in:st=0:d=3,'
+                            f'afade=t=out:st={MUSIC_DUR-8}:d=8" '
+                            f'-t {MUSIC_DUR} {outfile}')
+                        self.base.api_status["Music"]["Freesound"] = "success"
+                        log_api("C5_music.py", "Freesound", "success")
+                        return outfile
+                self.base.api_status["Music"]["Freesound"] = "failed"
+                log_api("C5_music.py", "Freesound", "failed")
+            except Exception as e:
+                self.base.api_status["Music"]["Freesound"] = "failed"
+                log_api("C5_music.py", "Freesound", "failed", str(e)[:60])
 
-    def _try_edge_tts(self, text: str, output_path: str, lang: str) -> bool:
-        try:
-            import edge_tts
+        # ═══════════ Try Pixabay CDN ═══════════
+        for idx, u in enumerate([
+            "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=soft-ambient-112191.mp3",
+            "https://cdn.pixabay.com/download/audio/2022/03/24/audio_4f3b5c5e3d.mp3?filename=peaceful-background-112194.mp3",
+            "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3?filename=relaxing-145038.mp3",
+        ], 1):
+            log_step("C5_music.py", f"Trying Pixabay-CDN #{idx}", "info")
+            if self.base.download(u, "music_raw.mp3"):
+                self.base.run_cmd(
+                    f'ffmpeg -y -stream_loop -1 -i music_raw.mp3 -af '
+                    f'"volume={MUSIC_VOL},afade=t=in:st=0:d=3,'
+                    f'afade=t=out:st={MUSIC_DUR-8}:d=8" '
+                    f'-t {MUSIC_DUR} {outfile}')
+                self.base.api_status["Music"]["Pixabay-CDN"] = "success"
+                log_api("C5_music.py", "Pixabay-CDN", "success")
+                return outfile
 
-            voice_map = {
-                "hi": "hi-IN-MadhurNeural",
-                "ar": "ar-SA-HamedNeural",
-                "en": "en-US-ChristopherNeural",
-            }
-            voice = voice_map.get(lang, "hi-IN-MadhurNeural")
-
-            async def _run():
-                communicate = edge_tts.Communicate(text, voice)
-                await communicate.save(output_path)
-
-            asyncio.run(_run())
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-                log_api("C4_tts.py", "Edge-TTS", "success")
-                return True
-        except Exception as e:
-            log_api("C4_tts.py", "Edge-TTS", "failed", str(e)[:50])
-        return False
-
-    def _try_gtts(self, text: str, output_path: str, lang: str) -> bool:
-        try:
-            from gtts import gTTS
-            tts = gTTS(text=text, lang=lang, slow=False)
-            tts.save(output_path)
-            log_api("C4_tts.py", "gTTS Fallback", "success")
-            return True
-        except Exception as e:
-            log_api("C4_tts.py", "gTTS Fallback", "failed", str(e)[:50])
-        return False
+        # ═══════════ Fallback: ambient pad ═══════════
+        log_step("C5_music.py", "Generated ambient fallback", "warn")
+        self.base.run_cmd(
+            f'ffmpeg -y -f lavfi -i "sine=frequency=110:duration={MUSIC_DUR}" '
+            f'-f lavfi -i "sine=frequency=165:duration={MUSIC_DUR}" '
+            f'-filter_complex "[0:a][1:a]amix=inputs=2:duration=longest,'
+            f'volume=0.08,afade=t=in:st=0:d=3,afade=t=out:st={MUSIC_DUR-8}:d=8" '
+            f'{outfile}')
+        self.base.api_status["Music"]["Generated-Ambient"] = "success (fallback)"
+        log_api("C5_music.py", "Generated-Ambient", "fallback")
+        return outfile
