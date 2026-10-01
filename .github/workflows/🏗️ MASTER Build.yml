@@ -46,6 +46,7 @@ jobs:
       - name: Build Structure
         run: |
           set -e
+          mkdir -p social_media/facebook social_media/instagram social_media/youtube
           touch social_media/__init__.py
           touch social_media/facebook/__init__.py
           touch social_media/instagram/__init__.py
@@ -133,14 +134,14 @@ jobs:
             done
           done
 
-          # Map G_entry scripts (rename story -> format type)
+          # Map G_entry scripts
           for pair in "facebook/short_video:short" "facebook/long_video:long" "instagram/story_video:story" "instagram/short_video:short" "youtube/short_video:short" "youtube/long_video:long"; do
             DIR="${pair%%:*}"; TYPE="${pair##*:}"
             [ -f "$SRC/G_entry/G1_story_pipeline.py" ] && cp "$SRC/G_entry/G1_story_pipeline.py" "social_media/$DIR/G_entry/G1_${TYPE}_pipeline.py" || true
             [ -f "$SRC/G_entry/G2_run_story.py" ] && cp "$SRC/G_entry/G2_run_story.py" "social_media/$DIR/G_entry/G2_run_${TYPE}.py" || true
           done
 
-          # Map H2 Test scripts (rename H2_test_story -> H2_test_{TYPE})
+          # Map H2 Test scripts
           for pair in "facebook/short_video:short" "facebook/long_video:long" "instagram/story_video:story" "instagram/short_video:short" "youtube/short_video:short" "youtube/long_video:long"; do
             DIR="${pair%%:*}"; TYPE="${pair##*:}"
             [ -f "$SRC/H_tests/H2_test_story.py" ] && cp "$SRC/H_tests/H2_test_story.py" "social_media/$DIR/H_tests/H2_test_${TYPE}.py" || true
@@ -502,11 +503,10 @@ jobs:
           echo "YT Upload done"
 
       # ====================================================
-      # STEP 11: ENSURE NO FILE IS EMPTY (BOILERPLATE FALLBACK)
+      # STEP 11: POPULATE EMPTY FILES
       # ====================================================
       - name: Populate Empty Files
         run: |
-          # Populate 0-byte Python files with boilerplate code
           find social_media -type f -name "*.py" -size 0 | while read -r file; do
             mod_name=$(basename "$file" .py)
             cat << XEOF > "$file"
@@ -530,7 +530,6 @@ jobs:
             echo "Populated empty python file: $file"
           done
 
-          # Populate remaining non-python 0-byte config files
           find social_media -type f -size 0 ! -name "*.gitkeep" | while read -r file; do
             echo "# Auto-generated config file: $(basename "$file")" > "$file"
             echo "Populated empty config file: $file"
@@ -555,5 +554,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "feat: MASTER build — Complete structure with non-empty files" || exit 0
+          git commit -m "fix: resolve folder creation step" || exit 0
           git push
