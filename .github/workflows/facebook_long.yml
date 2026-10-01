@@ -1,93 +1,177 @@
 # ============================================================
-# 📄 FILE:      facebook_long.yml
-# 📁 PATH:      .github/workflows/facebook_long.yml
-# 🎯 PURPOSE:   Facebook Long Video generation (daily)
-# ⏰ SCHEDULE:  7:30 PM IST (14:00 UTC)
+# 📄 FILE:      diagnose_long.yml
+# 📁 PATH:      .github/workflows/diagnose_long.yml
+# 🎯 PURPOSE:   Diagnose Facebook Long Video files
+# ⚡ TRIGGER:   Manual
 # ============================================================
 
-name: "🎥 Facebook Long Video"
+name: "🔍 Diagnose Long Video"
 
 
-# ─────────────────────────────────────────────────────────────
-# ① TRIGGERS
-# ─────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
-    inputs:
-      upload_to_social:
-        description: 'Upload to Facebook?'
-        required: true
-        type: boolean
-        default: false
-  schedule:
-    - cron: '0 14 * * *'   # 7:30 PM IST
 
 
-# ─────────────────────────────────────────────────────────────
-# ② PERMISSIONS
-# ─────────────────────────────────────────────────────────────
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 
-# ─────────────────────────────────────────────────────────────
-# ③ CONCURRENCY
-# ─────────────────────────────────────────────────────────────
-concurrency:
-  group: facebook-long
-  cancel-in-progress: false
-
-
-# ─────────────────────────────────────────────────────────────
-# ④ JOBS
-# ─────────────────────────────────────────────────────────────
 jobs:
-  long:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 5
 
     steps:
       # ───────── Step 1: Checkout ─────────
       - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.TOKEN_GITHUB }}
+          token: ${{ secrets.TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
 
-      # ───────── Step 2: Setup Python ─────────
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      # ───────── Step 3: Cache pip ─────────
-      - name: 📦 Cache Python Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-tools
-
-      # ───────── Step 4: Cache fonts ─────────
-      - name: 🔤 Cache Custom Fonts
-        id: cache-fonts
-        uses: actions/cache@v4
-        with:
-          path: ~/.fonts
-          key: ${{ runner.os }}-custom-fonts
-
-      # ───────── Step 5: Install FFmpeg + Fonts ─────────
-      - name: 🛠️ Install FFmpeg & Fonts
+      # ───────── Step 2: Show full tree ─────────
+      - name: 🌳 Show Full Tree
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg fonts-noto fonts-noto-core fonts-noto-extra fonts-noto-ui-core fonts-dejavu-core fonts-noto-color-emoji fontconfig
+          echo "============================================"
+          echo "📁 FULL REPO STRUCTURE"
+          echo "============================================"
+          find . -type f -not -path './.git/*' | sort | head -200
+          echo ""
+          echo "============================================"
+          echo "📁 LONG VIDEO FOLDER"
+          echo "============================================"
+          find social_media/facebook/long_video -type f 2>/dev/null | sort || echo "❌ FOLDER MISSING"
 
-      # ───────── Step 6: Download custom fonts ─────────
-      - name: ⬇️ Download Custom Fonts
-        if: steps.cache-fonts.outputs.cache-hit != 'true'
+      # ───────── Step 3: Check specific files ─────────
+      - name: 🔍 Check Critical Files
         run: |
-          mkdir -p ~/.fonts
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf" -O ~/.fonts/NotoSans-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf" -O ~/.fonts/NotoSans-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf" -O ~/.fonts/NotoSansDevanagari-Regular.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf" -O ~/.fonts/NotoSansDevanagari-Bold.ttf || true
-          wget -q --timeout=20 "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf
+          echo "============================================"
+          echo "🔍 CHECKING CRITICAL FILES"
+          echo "============================================"
+          echo ""
+
+          BASE="social_media/facebook/long_video"
+
+          # Check main folders
+          for folder in A_core B_graphics C_content D_video E_audio F_upload G_entry H_tests output; do
+            if [ -d "$BASE/$folder" ]; then
+              count=$(find "$BASE/$folder" -type f | wc -l)
+              echo "✅ $folder/ — $count files"
+            else
+              echo "❌ $folder/ — MISSING"
+            fi
+          done
+
+          echo ""
+          echo "============================================"
+          echo "🔍 CRITICAL FILES CHECK"
+          echo "============================================"
+          echo ""
+
+          # Check entry point
+          if [ -f "$BASE/G_entry/G2_run_long.py" ]; then
+            echo "✅ G_entry/G2_run_long.py — EXISTS"
+            echo "   Size: $(wc -l < $BASE/G_entry/G2_run_long.py) lines"
+          else
+            echo "❌ G_entry/G2_run_long.py — MISSING"
+          fi
+
+          # Check pipeline
+          if [ -f "$BASE/G_entry/G1_long_pipeline.py" ]; then
+            echo "✅ G_entry/G1_long_pipeline.py — EXISTS"
+            echo "   Size: $(wc -l < $BASE/G_entry/G1_long_pipeline.py) lines"
+          else
+            echo "❌ G_entry/G1_long_pipeline.py — MISSING"
+          fi
+
+          # Check config
+          if [ -f "$BASE/A_core/A1_config.py" ]; then
+            echo "✅ A_core/A1_config.py — EXISTS"
+          else
+            echo "❌ A_core/A1_config.py — MISSING"
+          fi
+
+          # Check __init__ files
+          echo ""
+          echo "============================================"
+          echo "📦 __init__.py CHECK"
+          echo "============================================"
+          for folder in "" A_core B_graphics C_content D_video E_audio F_upload G_entry H_tests; do
+            if [ -z "$folder" ]; then
+              f="$BASE/__init__.py"
+              name="(root)"
+            else
+              f="$BASE/$folder/__init__.py"
+              name="$folder"
+            fi
+
+            if [ -f "$f" ]; then
+              echo "✅ $name/__init__.py"
+            else
+              echo "❌ $name/__init__.py — MISSING"
+            fi
+          done
+
+      # ───────── Step 4: Try to run pipeline ─────────
+      - name: 🚀 Test Run Pipeline
+        run: |
+          echo "============================================"
+          echo "🚀 TEST RUN"
+          echo "============================================"
+          cd social_media/facebook/long_video || exit 1
+
+          echo ""
+          echo "Current directory: $(pwd)"
+          echo ""
+          echo "Testing Python import..."
+          echo ""
+
+          # Check Python syntax
+          python3 -c "import sys; sys.path.insert(0, '.'); print('✅ Python OK')" || true
+
+          # Try importing modules
+          echo ""
+          echo "Testing imports:"
+          python3 << 'PYEOF'
+          import sys
+          sys.path.insert(0, '.')
+
+          # Test A_core
+          try:
+              from A_core.A1_config import Config
+              print("✅ A_core.A1_config — OK")
+          except Exception as e:
+              print(f"❌ A_core.A1_config — {str(e)[:80]}")
+
+          # Test A2_logger
+          try:
+              from A_core.A2_logger import log
+              print("✅ A_core.A2_logger — OK")
+          except Exception as e:
+              print(f"❌ A_core.A2_logger — {str(e)[:80]}")
+
+          # Test G_entry
+          try:
+              from G_entry.G2_run_long import main
+              print("✅ G_entry.G2_run_long — OK")
+          except Exception as e:
+              print(f"❌ G_entry.G2_run_long — {str(e)[:120]}")
+          PYEOF
+
+      # ───────── Step 5: Show working directory ─────────
+      - name: 📂 Verify Working Directory
+        run: |
+          echo "============================================"
+          echo "📂 WORKING DIRECTORY CHECK"
+          echo "============================================"
+          echo ""
+          echo "Repo root: $(pwd)"
+          echo ""
+          echo "Looking for: social_media/facebook/long_video/"
+          echo ""
+          if [ -d "social_media/facebook/long_video" ]; then
+            echo "✅ Folder exists"
+            echo ""
+            ls -la social_media/facebook/long_video/
+          else
+            echo "❌ Folder does NOT exist"
+          fi
