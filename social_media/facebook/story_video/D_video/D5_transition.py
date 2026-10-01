@@ -1,6 +1,6 @@
 # ============================================================
 # 📄 FILE:      D5_transition.py
-# 📁 PATH:      social_media/facebook/story_video/D_video/D5_transition.py
+# 📁 PATH:      social_media/facebook/short_video/D_video/D5_transition.py
 # 🎯 PURPOSE:   Transition helpers (crossfade + easing)
 # ============================================================
 
