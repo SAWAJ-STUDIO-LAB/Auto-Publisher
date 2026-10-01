@@ -1,7 +1,7 @@
 # ============================================================
-# FILE:      A2_logger.py
-# PATH:      social_media/facebook/story_video/A_core/A2_logger.py
-# PURPOSE:   Print + Telegram logging (lazy imports)
+# 📄 FILE:      A2_logger.py
+# 📁 PATH:      social_media/facebook/long_video/A_core/A2_logger.py
+# 🎯 PURPOSE:   Print + Telegram logging
 # ============================================================
 
 from datetime import datetime
