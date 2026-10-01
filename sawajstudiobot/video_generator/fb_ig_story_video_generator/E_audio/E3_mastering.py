@@ -8,19 +8,11 @@
 
 """
 ╔══════════════════════════════════════════════════════════╗
-║   🎚️  MASTERING MODULE                                   ║
+║   🎚️  MASTERING MODULE (STORY)                           ║
 ║   ═══════════════════════                                ║
 ║                                                          ║
-║   🎯 Purpose:                                            ║
-║      Voice audio ko master karna                         ║
-║                                                          ║
 ║   📖 Settings:                                            ║
-║      • Tempo:     0.88 (slower for clarity)              ║
-║      • Loudnorm:  I=-16 LUFS (broadcast standard)        ║
-║      • Volume:    1.35x (boosted)                        ║
-║                                                          ║
-║   🎯 Output:                                              ║
-║      Clean, professional voice audio                     ║
+║      • Tempo: 0.88 | Loudnorm: -16 LUFS | Volume: 1.35x  ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """
@@ -28,38 +20,18 @@
 from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
-# ═══════════════════════════════════════════════════════════
-# 🎚️  MASTERING CLASS
-# ═══════════════════════════════════════════════════════════
-
 class Mastering:
-    """Master voice audio (tempo + loudnorm + volume)."""
+    """Master voice audio (Story: slower tempo 0.88)."""
 
-    # ─────────────────────────────────────────────────────
-    # ① INIT
-    # ─────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("E3_mastering.py", "Audio mastering")
         self.base = base
         log_file_end("E3_mastering.py", "success", "Ready")
 
-    # ─────────────────────────────────────────────────────
-    # ② MASTER VOICE — apply tempo + loudnorm + volume
-    # ─────────────────────────────────────────────────────
     def master_voice(self, in_file, out_file):
-        """
-        Apply mastering to voice.
-
-        Args:
-            in_file:  input mp3 path
-            out_file: output mp3 path
-
-        Returns:
-            out_file path
-        """
+        """Apply tempo + loudnorm + volume."""
         log_step("E3_mastering.py", "master_voice()", "ok")
 
-        # ═══════════ FFmpeg master command ═══════════
         self.base.run_cmd(
             f'ffmpeg -y -i {in_file} -af '
             f'"atempo=0.88,loudnorm=I=-16:TP=-1.5:LRA=11,volume=1.35" '
