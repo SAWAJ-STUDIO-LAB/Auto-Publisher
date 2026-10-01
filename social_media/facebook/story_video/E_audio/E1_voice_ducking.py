@@ -1,23 +1,45 @@
 # ============================================================
-# FILE:      E1_voice_ducking.py
-# PATH:      social_media/facebook/story_video/E_audio/E1_voice_ducking.py
-# PURPOSE:   Mix voice + music with ducking
+# 📄 FILE:      E1_voice_ducking.py
+# 📁 PATH:      social_media/facebook/story_video/E_audio/E1_voice_ducking.py
+# 🎯 PURPOSE:   Mix voice + music (music auto-lowers during voice)
 # ============================================================
 
 from A_core.A2_logger import log_file_start, log_file_end, log_step
 
 
+# ─────────────────────────────────────────────────────────────
+# ① VOICE DUCKING CLASS
+# ─────────────────────────────────────────────────────────────
 class VoiceDucking:
+    """Mix voice over music with volume ducking."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("E1_voice_ducking.py", "Voice + music mix")
         self.base = base
         log_file_end("E1_voice_ducking.py", "success", "Ready")
 
+    # ─────────────────────────────────────────────────────────
+    # ③ MIX — mix voice + music
+    # ─────────────────────────────────────────────────────────
     def mix(self, voice_file, music_file, out_file, voice_dur,
             music_vol=0.20):
+        """
+        Mix voice over music.
+        
+        Args:
+            voice_file: path to voice mp3
+            music_file: path to music mp3
+            out_file: output mp3 path
+            voice_dur: voice duration in seconds
+            music_vol: music volume (0.20 = 20%)
+        """
         log_step("E1_voice_ducking.py", "mix() starting", "ok")
+
         fade = max(voice_dur - 3.0, 1.0)
+
         self.base.run_cmd(
             f'ffmpeg -y -i {voice_file} -i {music_file} '
             f'-filter_complex '
@@ -25,5 +47,6 @@ class VoiceDucking:
             f'afade=t=out:st={fade:.2f}:d=3[bg];'
             f'[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]" '
             f'-map "[aout]" -c:a libmp3lame -b:a 192k {out_file}')
+
         log_step("E1_voice_ducking.py", "Mixed", "ok")
         return out_file
