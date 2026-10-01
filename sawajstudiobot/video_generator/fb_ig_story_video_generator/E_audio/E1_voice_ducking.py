@@ -34,25 +34,11 @@ class VoiceDucking:
 
     def mix(self, voice_file, music_file, out_file, voice_dur,
             music_vol=0.20):
-        """
-        Mix voice over music with fade in/out.
-
-        Args:
-            voice_file: voice mp3 path
-            music_file: music mp3 path
-            out_file:   output mp3 path
-            voice_dur:  voice duration (seconds)
-            music_vol:  music volume (0.20 = 20%)
-
-        Returns:
-            out_file path
-        """
+        """Mix voice over music with fade in/out."""
         log_step("E1_voice_ducking.py", "mix() starting", "ok")
 
-        # Fade out point
         fade = max(voice_dur - 3.0, 1.0)
 
-        # FFmpeg mix command
         self.base.run_cmd(
             f'ffmpeg -y -i {voice_file} -i {music_file} '
             f'-filter_complex '
