@@ -1,23 +1,34 @@
 # ============================================================
-# FILE:      F2_upload_story.py
-# PATH:      social_media/facebook/story_video/F_upload/F2_upload_story.py
-# PURPOSE:   Facebook Story upload via Graph API
+# 📄 FILE:      F2_upload_story.py
+# 📁 PATH:      social_media/facebook/story_video/F_upload/F2_upload_story.py
+# 🎯 PURPOSE:   Upload to Facebook Story via Graph API
 # ============================================================
 
 import os
 from A_core.A2_logger import log_file_start, log_file_end, log_step, log_api
 
 
+# ─────────────────────────────────────────────────────────────
+# ① STORY UPLOADER CLASS
+# ─────────────────────────────────────────────────────────────
 class StoryUploader:
+    """Upload video to Facebook Story."""
 
+    # ─────────────────────────────────────────────────────────
+    # ② INIT
+    # ─────────────────────────────────────────────────────────
     def __init__(self, base):
         log_file_start("F2_upload_story.py", "Facebook Story upload")
         self.base = base
         log_file_end("F2_upload_story.py", "success", "Ready")
 
+    # ─────────────────────────────────────────────────────────
+    # ③ UPLOAD — upload to Facebook Story
+    # ─────────────────────────────────────────────────────────
     def upload(self, video_path):
         log_step("F2_upload_story.py", f"upload({video_path})", "ok")
 
+        # ───────── Get credentials ─────────
         token = os.environ.get("FACEBOOK_META_TOKEN", "").strip()
         if not token:
             log_step("F2_upload_story.py", "META token missing", "fail")
@@ -26,6 +37,7 @@ class StoryUploader:
         page_token = token
         page_id = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
 
+        # ───────── Resolve page token ─────────
         try:
             acc = self.base.session.get(
                 "https://graph.facebook.com/v21.0/me/accounts",
@@ -48,11 +60,13 @@ class StoryUploader:
             log_step("F2_upload_story.py", "Page ID missing", "fail")
             return False
 
+        # ───────── Upload in 3 phases ─────────
         try:
             f_size = os.path.getsize(video_path)
             log_step("F2_upload_story.py",
                      f"Starting upload ({f_size // 1024} KB)", "info")
 
+            # ═══════ Phase 1: Start ═══════
             start = self.base.session.post(
                 f"https://graph.facebook.com/v21.0/{page_id}/video_stories",
                 data={"upload_phase": "start",
@@ -62,6 +76,7 @@ class StoryUploader:
             v_id = start.get("video_id")
             v_url = start.get("upload_url")
 
+            # ═══════ Phase 2: Upload bytes ═══════
             if v_id and v_url:
                 with open(video_path, "rb") as f:
                     up_res = self.base.session.post(
@@ -74,6 +89,7 @@ class StoryUploader:
                         data=f.read(), timeout=180)
 
                 if up_res.status_code in (200, 201):
+                    # ═══════ Phase 3: Finish ═══════
                     finish = self.base.session.post(
                         f"https://graph.facebook.com/v21.0/{page_id}/video_stories",
                         data={"upload_phase": "finish",
@@ -89,6 +105,7 @@ class StoryUploader:
             log_api("F2_upload_story.py", "FB-Story", "failed")
             return False
         except Exception as e:
-            self.base.api_status["Facebook Story"]["Upload"] = f"failed ({str(e)[:40]})"
+            self.base.api_status["Facebook Story"]["Upload"] = \
+                f"failed ({str(e)[:40]})"
             log_api("F2_upload_story.py", "FB-Story", "failed", str(e)[:100])
             return False
