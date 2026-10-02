@@ -1,4 +1,4 @@
-name: Combine all-in-one Send repo
+name: Send_repo📤
 
 on:
   workflow_dispatch:
